@@ -11,10 +11,6 @@ QT       += serialport
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 
-# INCLUDEPATH     += D:\JRR\JRR_V4\Eigen
-# INCLUDEPATH     += D:\JRR\JRR_V4\Robot
-# INCLUDEPATH     += D:\JRR\JRR_V4\Sri
-
 INCLUDEPATH     += C:\Users\SuperMan\Desktop\JRR_V4\Eigen\Eigen
 INCLUDEPATH     += C:\Users\SuperMan\Desktop\JRR_V4\Robot
 INCLUDEPATH     += C:\Users\SuperMan\Desktop\JRR_V4\Sri
