@@ -38,7 +38,7 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-    // 对机器人的回零程序做了封装
+    // 对机器人的回零程序做了封装,这里使用的是PPM
     bool runToHome();
 
     // 对读取编码器和计算关节角进行了封装
@@ -52,6 +52,9 @@ public:
 
     // 读取电机的角速度，更新关节的角速度
     void readJointVelocity();
+
+    //使用VM进行机器人回零函数
+    //     void moveToHome();
 
 private:
     Ui::MainWindow *ui;

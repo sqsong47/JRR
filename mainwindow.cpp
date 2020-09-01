@@ -348,12 +348,24 @@ void MainWindow::startRunning()
 {
     // 在启动按钮的槽函数下已经激活了PVM，这里直接设置参数使用就可以了
     long* tmpVel = _robot->getAdmMotorVel();
+
+#define PVM
+#ifndef PVM
+    // 以下代码为设置PVM的参数和调用PVM的运动函数
     for (WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
     {
         _motorDevice->getQMotorObject()->ePOS_SetVelocityProfile(
                     i+1, static_cast<DWORD>(5 * tmpVel[i]),
                     static_cast<DWORD>(5 * tmpVel[i]));
         _motorDevice->getQMotorObject()->ePOS_MoveWithVelocity(i+1, tmpVel[i]);
+    }
+#endif
+
+    // 现在直接改成VM的运动模式
+    for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
+    {
+        // 使用VM进行机器人运动
+        _motorDevice->getQMotorObject()->ePOS_SetVelocityMust(i+1, tmpVel[i]);
     }
 }
 
@@ -501,10 +513,10 @@ void MainWindow::mainControlLoop()
             qDebug() << "episode wait " ;
 
             // 设置电机的工作模式为PVM
-            for(WORD i = 1; i <= 6; ++i)
-            {
-                _motorDevice->getQMotorObject()->ePOS_ActiveProfileVelocityMode(i);
-            }
+//            for(WORD i = 1; i <= 6; ++i)
+//            {
+//                _motorDevice->getQMotorObject()->ePOS_ActiveProfileVelocityMode(i);
+//            }
 
 
 #define DEBUG4
@@ -999,10 +1011,21 @@ void MainWindow::on_ptn_suspendTrain_clicked()
 
 void MainWindow::on_ptn_startTrain_clicked()
 {
+
+#define PVM
+#ifndef PVM
     // 设置电机的工作模式为PVN，进行导纳训练
     for(WORD i = 1; i <= JRR_JOINT_NUMBER; ++i)
     {
         _motorDevice->getQMotorObject()->ePOS_ActiveProfileVelocityMode(i);
+    }
+#endif
+
+    // 设置电机的工作模式为VM，进行导纳运动
+    for(WORD i = 1; i < JRR_JOINT_NUMBER; ++i)
+    {
+        // 激活VM
+        _motorDevice->getQMotorObject()->ePOS_ActiveVelocityMode(i);
     }
 
     // 置标志变量为True

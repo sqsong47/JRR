@@ -33,6 +33,9 @@ class QRobot : public QObject
 public:
     explicit QRobot(QObject *parent = nullptr);
 
+    //电机的期望运动行程
+    long distanceExpect[6] = {0, 0, 0, 0, 0, 0};
+
 public:
     const double transRatio[JRR_JOINT_NUMBER] = {12.9, 23.6, 11.6, 20.09333333, 3.6, 4.7777777778};        // 电机到关节的传动比
     const int directions[JRR_JOINT_NUMBER] = {-1, 1, 1, -1, -1, -1};                                       // 方向修正，由绕线方向决定
