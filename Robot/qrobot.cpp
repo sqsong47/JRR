@@ -547,6 +547,8 @@ void QRobot::setCurrentEncoderAngle(
     }else {
         _q_j[5] = _q_e[5] - _q_z[5];
     }
+
+    // qDebug() << "joint angle: " << _q_j[5];
 }
 
 void QRobot::setJointVelocity(long v1, long v2, long v3,

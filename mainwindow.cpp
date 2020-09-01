@@ -335,6 +335,8 @@ void MainWindow::updateJointAngle()
     double theta_5 = _rlsJoint5->requestAngleValue();
     double theta_6 = _rlsJoint6->requestAngleValue();
 
+    // qDebug() << "joint 6" << theta_6;
+
     // 传入编码器的读数，该函数同时包含更新关节角的功能
     _robot->setCurrentEncoderAngle(theta_1,theta_2,theta_3,theta_4,theta_5,theta_6);
 }
@@ -492,6 +494,16 @@ void MainWindow::mainControlLoop()
         qDebug() << "episode finished" ;
 
         // QThread::msleep(750);
+
+
+        // 设置电机速度为0
+        for(WORD i = 0; i<6; i++)
+        {
+            _motorDevice->getQMotorObject()->ePOS_MoveWithVelocity(i+1,0);
+        }
+
+        // 暂停一段时间
+        QThread::sleep(1);
 
 
         // 添加机器人回零代码，似乎有点问题，step函数此时是不是一定暂停了？
