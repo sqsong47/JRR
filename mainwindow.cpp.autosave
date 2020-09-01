@@ -1097,8 +1097,6 @@ void MainWindow::on_ptn_suspendTrain_clicked()
 
     // 执行机器人的归零程序
     runToHome();
-
-
 }
 
 void MainWindow::on_ptn_startTrain_clicked()

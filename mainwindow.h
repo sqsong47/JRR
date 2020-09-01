@@ -113,6 +113,7 @@ private slots:
     void on_ptn_pythonInit_clicked();
     void on_ptn_suspendTrain_clicked();
     void on_ptn_startTrain_clicked();
+    void on_ptn_activeVM_clicked();
 };
 
 #endif // MAINWINDOW_H

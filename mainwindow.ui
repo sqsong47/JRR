@@ -593,6 +593,19 @@
      <string>暂停训练</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="ptn_activeVM">
+    <property name="geometry">
+     <rect>
+      <x>600</x>
+      <y>270</y>
+      <width>101</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>激活VM</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
