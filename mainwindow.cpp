@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <iostream>
 #include <QThread>
+#include <time.h>
 
 
 /* 条件编译指令，可进行扩展
@@ -293,7 +294,7 @@ MainWindow::~MainWindow()
 // 该函数有待改进，程序只有一个true出口，不太符合逻辑，现在只有来判断是否已经归零结束
 bool MainWindow::runToHome()
 {
-    // 获取电机需要的运动行程,motorDisplacement是电机需要运动的行程
+    // 获取电机需要的运动行程,motorDisplacement是电机需要运动的行程,单位时counts
     Eigen::Array<long, JRR_JOINT_NUMBER, 1> motorStroke = _robot->calMotorStroke();
 
     // 激活PPM，设置归零参数
@@ -392,20 +393,36 @@ bool MainWindow::moveToHome()
 {
     // 获取电机需要的运动行程,motorDisplacement是电机需要运动的行程
     // 有一个问题calMotorStroke()是不是实时更新的
+    // 虽然是可以每次进入主循环都更新，但是由于执行重置状态操作时，主循环会卡死，还是只能读取一次，不可以实时读取
     Eigen::Array<long, JRR_JOINT_NUMBER, 1> motorStroke = _robot->calMotorStroke();
 
+    // 设置机器人的回零时间为3s，即0.05min
+    int homingTime = 3;
 
-//    DWORD profileVolecity = 1 * static_cast<DWORD>(_robot->transRatio[i]);
-
-
-
-    // 设置完参数后开始运动
-    for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
+    // 每个电机需要执行的速度,rpm
+    long motorVel[6] = {0};
+    for(int i = 0; i < 6; i++)
     {
-        long targetPosition = motorStroke[i];
-        _motorDevice->getQMotorObject()->ePOS_MoveToPosition(i+1, targetPosition);
+        // motorStroke存储的counts，先要转化为转数,再转化为rpm
+        motorVel[i] = static_cast<long>(
+                    motorStroke[i] / _robot->countsPerTurn[i] / homingTime / 60);
     }
 
+    // 接下来应该考虑让电机以速度motorVel，运行3s
+    for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
+    {
+        // 开始运动
+        _motorDevice->getQMotorObject()->ePOS_SetVelocityMust(i+1, motorVel[i]);
+    }
+
+    QThread::sleep(3);
+
+    // 重置为0
+    for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
+    {
+        // 开始运动
+        _motorDevice->getQMotorObject()->ePOS_SetVelocityMust(i+1, 0);
+    }
 
     ui->textEdit_screen->append("Homing Finished");
     return true;
@@ -525,12 +542,20 @@ void MainWindow::mainControlLoop()
         // QThread::msleep(750);
         // 添加机器人回零代码，似乎有点问题，step函数此时是不是一定暂停了？
 
-        // runToHome()需要修改，此时用的模式PPM，需要改成VM
-        if (runToHome())
+        //设置速度为0
+        for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
         {
-            // QThread::sleep(5);
-            qDebug() << "episode wait " ;
+            _motorDevice->getQMotorObject()->ePOS_SetVelocityMust(i+1, 0);
+        }
 
+        // 暂停1s
+        QThread::sleep(1);
+
+        // runToHome()需要修改，此时用的模式PPM，需要改成VM
+        // if (runToHome())
+        if(moveToHome())
+        {
+            qDebug() << "episode wait " ;
 
 #define PVM
 #ifndef PVM
@@ -558,6 +583,9 @@ void MainWindow::mainControlLoop()
 
             // 最后一次调用step
             _pyHandler->trainOneStep(0, 0, 0);
+
+            // 暂停1s用于速度的切换
+            QThread::sleep(1);
 
             // 置标志量为true，开启下次训练
             _isTraingFlag = true;
