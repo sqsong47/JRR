@@ -54,7 +54,7 @@ public:
     void readJointVelocity();
 
     //使用VM进行机器人回零函数
-    //     void moveToHome();
+    bool moveToHome();
 
 private:
     Ui::MainWindow *ui;

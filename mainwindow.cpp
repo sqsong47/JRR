@@ -388,6 +388,30 @@ void MainWindow::readJointVelocity()
     _robot->setJointVelocity(joint1, joint2, joint3, joint4, joint5, joint6);
 }
 
+bool MainWindow::moveToHome()
+{
+    // 获取电机需要的运动行程,motorDisplacement是电机需要运动的行程
+    // 有一个问题calMotorStroke()是不是实时更新的
+    Eigen::Array<long, JRR_JOINT_NUMBER, 1> motorStroke = _robot->calMotorStroke();
+
+
+//    DWORD profileVolecity = 1 * static_cast<DWORD>(_robot->transRatio[i]);
+
+
+
+    // 设置完参数后开始运动
+    for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
+    {
+        long targetPosition = motorStroke[i];
+        _motorDevice->getQMotorObject()->ePOS_MoveToPosition(i+1, targetPosition);
+    }
+
+
+    ui->textEdit_screen->append("Homing Finished");
+    return true;
+
+}
+
 void MainWindow::showError(std::string Msg)
 {
     QMessageBox msgBox;
@@ -395,6 +419,11 @@ void MainWindow::showError(std::string Msg)
     msgBox.exec();
 }
 
+
+
+
+
+// ***********************************************************************************
 // 更新robot中的数据,机器人的主控制循环
 void MainWindow::mainControlLoop()
 {
@@ -411,16 +440,8 @@ void MainWindow::mainControlLoop()
 #endif
 
     // 只有机器人处于Enable状态才能执行下面代码
-    if(_robot->_robotState < RobotStates::Enabled)
-    {
-        return;
-    }
-
-
-    if(_isSriStartFlag == false)
-    {
-        return;
-    }
+    if(_robot->_robotState < RobotStates::Enabled){return;}
+    if(_isSriStartFlag == false){return;}
 
     // 更新力信息，已证实执行成功
     updateForceValue();
@@ -447,20 +468,16 @@ void MainWindow::mainControlLoop()
     }
 
     // 进行导纳运动
-    moveInAdmittanceMode();
+    startRunning();
 #endif
 
 #if OPERATE_MODE == 2
 
     // 判断是否处于训练过程
-    if(!_isTraingFlag)
-    {
-        return;
-    }
+    if(!_isTraingFlag){return;}
 
     // 更新关节的速度值,该函数读取电机的转速进而进行关节速度的换算
     readJointVelocity();
-
 
     // 此时Robot里面已经存储了正确的::<关节角度>---<关节速度>---<力传感器>::信息
     _virtualDamp = _pyHandler->trainOneStep(_robot->getVelocity(),
@@ -477,6 +494,7 @@ void MainWindow::mainControlLoop()
 
 #define DEBUG1
 #ifndef DEBUG1
+    // 输出强化学习的相关信息
     static int i = 0;
     i++;
     if(i % 30 == 0)
@@ -492,31 +510,37 @@ void MainWindow::mainControlLoop()
 
 #define DEBUG2
 #ifndef DEBUG2
+    // 输出导纳值
     qDebug() << "Admittance: " << _virtualDamp;
 #endif
 
-    // 根据_virtualDamp的值判断episode是否已经完成
+    // 根据_virtualDamp的值判断episode是否已经完成，一个episode结束到另一个episode开始的状态重置代码都在下面
+    // 重置状态主要指的是机器人要回零
     if (_virtualDamp < 0)
     {
-
         // 暂停训练，从主循环退出
         _isTraingFlag = false;
         qDebug() << "episode finished" ;
 
         // QThread::msleep(750);
-
-
         // 添加机器人回零代码，似乎有点问题，step函数此时是不是一定暂停了？
+
+        // runToHome()需要修改，此时用的模式PPM，需要改成VM
         if (runToHome())
         {
             // QThread::sleep(5);
             qDebug() << "episode wait " ;
 
+
+#define PVM
+#ifndef PVM
+            // 由于回零程序还有导纳控制的程序都采用的是VM的模式，现在程序中不需要再额外的添加状态切换代码
             // 设置电机的工作模式为PVM
-//            for(WORD i = 1; i <= 6; ++i)
-//            {
-//                _motorDevice->getQMotorObject()->ePOS_ActiveProfileVelocityMode(i);
-//            }
+            for(WORD i = 1; i <= 6; ++i)
+            {
+                _motorDevice->getQMotorObject()->ePOS_ActiveProfileVelocityMode(i);
+            }
+#endif
 
 
 #define DEBUG4
@@ -533,16 +557,13 @@ void MainWindow::mainControlLoop()
             _robot->resetJerk();
 
             // 最后一次调用step
-            //            _virtualDamp = _pyHandler->trainOneStep(_robot->getVelocity(),
-            //                                                    _robot->getAccel(),
-            //                                                    _robot->getReward());
             _pyHandler->trainOneStep(0, 0, 0);
+
+            // 置标志量为true，开启下次训练
             _isTraingFlag = true;
         }
         return;
     }
-
-
 
     // 更新电机运动参数
     if(!_robot->updateAdmMotionPara(_virtualDamp))
@@ -550,15 +571,19 @@ void MainWindow::mainControlLoop()
         return;
     }
 
-
     // 电机运动，等测试完之后再打开相应代码
     startRunning();
-
-
 #endif
 
     //----------------------------------------------------------------------
 }
+
+// ******************************************************************************
+
+
+
+
+
 
 void MainWindow::showSriConfigState()
 {
@@ -900,11 +925,23 @@ void MainWindow::on_pushButton_startAdmittanceMode_clicked()
     {
         _isInAdmittanceFlag = TRUE;
 
-        // 使用PVM 做导纳运动
+#define PVM
+#ifndef PVM
+        // 现在使用的是VM做导纳控制，所以下面的代码不再需要
+        // 使用PVM 做导纳运动,
         for(WORD i = 1; i <= JRR_JOINT_NUMBER; ++i)
         {
             _motorDevice->getQMotorObject()->ePOS_ActiveProfileVelocityMode(i);
         }
+
+#endif
+
+        // 使用VM模式做导纳控制
+        for(WORD i = 1; i <= JRR_JOINT_NUMBER; ++i)
+        {
+            _motorDevice->getQMotorObject()->ePOS_ActiveVelocityMode(i);
+        }
+
         ui->pushButton_startAdmittanceMode->setText("STOP");
 
     }else{
@@ -1022,7 +1059,7 @@ void MainWindow::on_ptn_startTrain_clicked()
 #endif
 
     // 设置电机的工作模式为VM，进行导纳运动
-    for(WORD i = 1; i < JRR_JOINT_NUMBER; ++i)
+    for(WORD i = 1; i <= JRR_JOINT_NUMBER; ++i)
     {
         // 激活VM
         _motorDevice->getQMotorObject()->ePOS_ActiveVelocityMode(i);
