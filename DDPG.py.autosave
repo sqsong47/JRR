@@ -39,7 +39,7 @@ class DDPG(object):
         self.episode_reward = 0.0
         self.cpp_online = False
         self.online = False
-        self.velocity_expect = 0.75  # 目标速度
+        self.velocity_expect = 0.3  # 目标速度
         self.is_run_done = 0
         self.step_number = 0
 
@@ -245,10 +245,13 @@ class DDPG(object):
                     print("----------------------22222一次episode结束因为step 100次----------------------------------")
                     # break
 
-#        self.is_episode_done = False
+#        self.is_episode_done = False        
 #        print('Running time: ', time.time() - t1)
 #        self.is_run_done = 1
 #        return self.is_run_done
+        
+        
+
 
     def show_episode_result(self):
         """
