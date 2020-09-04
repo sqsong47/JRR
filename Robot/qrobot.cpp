@@ -64,7 +64,7 @@ QRobot::QRobot(QObject *parent) : QObject(parent)
     //    M << 5, 5, 5, 250, 250, 250;                        // 初始化质量， 旋转轴非常大，暂定
     //    D << 25.0, 25.0, 50.0, 2.5, 2.5, 2.5;               // 初始化阻尼， 正数,旋转轴非常大，暂定
 
-    _virtualMass << 5, 5, 5, 5, 5, 5;                        // 初始化质量， 旋转轴非常大，暂定
+    _virtualMass << 10, 10, 10, 10, 10, 10;                        // 初始化质量， 旋转轴非常大，暂定
     _virtualDamp << 25.0, 25.0, 50.0, 5, 5, 5;               // 初始化阻尼， 正数,旋转轴非常大，暂定
 }
 
@@ -486,6 +486,117 @@ void QRobot::dimMask(Eigen::Array<double, 6, 1> array, int dimension)
     }
 }
 
+
+
+
+
+void QRobot::testTermVel()
+{
+    qDebug() << "IS HERE";
+
+
+#ifndef DEBUG
+    qDebug() << tr("参与运算的力和力矩值为： ");
+    qDebug() << _forceInDireX << " " << _forceInDireY << " " << _forceInDireZ << " "
+             << _torAroundX << "" << _torAroundY << " " << _torAroundZ;
+#endif
+
+    // 实际参与运算的角度应该是关节角加上初始偏置角，由DH坐标系确定
+    // _q_j是角度值，应该转成弧度制参与运算
+    _theta1 = qDegreesToRadians(_q_j[0]) + _offsetInit[0];
+    _theta2 = qDegreesToRadians(_q_j[1]) + _offsetInit[1];
+    _theta3 = qDegreesToRadians(_q_j[2]) + _offsetInit[2];
+    _theta4 = qDegreesToRadians(_q_j[3]) + _offsetInit[3];
+    _theta5 = qDegreesToRadians(_q_j[4]) + _offsetInit[4];
+    _theta6 = qDegreesToRadians(_q_j[5]) + _offsetInit[5];
+
+
+#ifndef DEBUG
+    qDebug() << tr("theta 1-6 is: ");
+    qDebug() << _theta1 << " " << _theta2 << " " << _theta3 << " " <<
+                _theta4 << " " << _theta5 << " " << _theta6;
+#endif
+
+
+    // 计算当前转角下的cos和sin,数学计算只进行一次,这样可以提高运算速度
+    _s1 = qSin(_theta1);   _c1 = qCos(_theta1);
+    _s2 = qSin(_theta2);   _c2 = qCos(_theta2);
+    _s3 = qSin(_theta3);   _c3 = qCos(_theta3);
+    _s4 = qSin(_theta4);   _c4 = qCos(_theta4);
+    _s5 = qSin(_theta5);   _c5 = qCos(_theta5);
+    _s6 = qSin(_theta6);   _c6 = qCos(_theta6);
+
+
+    // 计算jacobian
+    // 使用的其实是Jacob0;
+    _jacob << (429*_s1*_s2)/1000 - (117*_c4*(_c1*_s3 + _c2*_c3*_s1))/1000 + (697*_s4*(_c1*_s3 + _c2*_c3*_s1))/1250 + (697*_c4*_s1*_s2)/1250 + (117*_s1*_s2*_s4)/1000,
+            -_c1*(_c2*((697*_c4)/1250 + (117*_s4)/1000 + 429/1000.0) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)),
+            -((_c3*_s1 + _c1*_c2*_s3)*(585*_c4 - 2788*_s4))/5000,
+            - (_c1*_c3 - _c2*_s1*_s3)*(_c2*((697*_c4)/1250 + (117*_s4)/1000) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)) - _s2*_s3*((_c1*_s3 + _c2*_c3*_s1)*((117*_c4)/1000 - (697*_s4)/1250) - _s1*_s2*((697*_c4)/1250 + (117*_s4)/1000)),
+            0,
+            0,
+            (697*_s4*(_s1*_s3 - _c1*_c2*_c3))/1250 - (117*_c4*(_s1*_s3 - _c1*_c2*_c3))/1000 - (429*_c1*_s2)/1000 - (697*_c1*_c4*_s2)/1250 - (117*_c1*_s2*_s4)/1000,
+            -_s1*(_c2*((697*_c4)/1250 + (117*_s4)/1000 + 429/1000.0) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)),
+            ((_c1*_c3 - _c2*_s1*_s3)*(585*_c4 - 2788*_s4))/5000,
+            - (_c3*_s1 + _c1*_c2*_s3)*(_c2*((697*_c4)/1250 + (117*_s4)/1000) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)) - _s2*_s3*((_s1*_s3 - _c1*_c2*_c3)*((117*_c4)/1000 - (697*_s4)/1250) + _c1*_s2*((697*_c4)/1250 + (117*_s4)/1000)),
+            0,
+            0,
+            0,
+            (117*_c2*_c3*_c4)/1000 - (697*_c4*_s2)/1250 - (117*_s2*_s4)/1000 - (429*_s2)/1000 - (697*_c2*_c3*_s4)/1250,
+            -(_s2*_s3*(585*_c4 - 2788*_s4))/5000,
+            (117*_c2*_c4)/1000 - (697*_c2*_s4)/1250 - (697*_c3*_c4*_s2)/1250 - (117*_c3*_s2*_s4)/1000,
+            0,
+            0,
+            0,
+            _s1,
+            -_c1*_s2,
+            _c3*_s1 + _c1*_c2*_s3,
+            _s4*(_s1*_s3 - _c1*_c2*_c3) - _c1*_c4*_s2,
+            _c5*(_c3*_s1 + _c1*_c2*_s3) - _s5*(_c4*(_s1*_s3 - _c1*_c2*_c3) + _c1*_s2*_s4),
+            0,
+            -_c1,
+            -_s1*_s2,
+            _c2*_s1*_s3 - _c1*_c3,
+            - _s4*(_c1*_s3 + _c2*_c3*_s1) - _c4*_s1*_s2,
+            _s5*(_c4*(_c1*_s3 + _c2*_c3*_s1) - _s1*_s2*_s4) - _c5*(_c1*_c3 - _c2*_s1*_s3),
+            1,
+            0,
+            _c2,
+            _s2*_s3,
+            _c2*_c4 - _c3*_s2*_s4,
+            _s5*(_c2*_s4 + _c3*_c4*_s2) + _c5*_s2*_s3;
+
+
+    // 雅克比矩阵求逆，用作奇异性检查
+    _invJacob = _jacob.inverse();
+
+
+    _velocity << 0.5, 0, 0, 0, 0, 0;
+    _d_qd_j = _invJacob * (_velocity.matrix());
+
+    for(int i = 0; i < JRR_JOINT_NUMBER; i++)
+    {
+        // 反算关节电机的速度，单位是rpm  经实验验证是对的
+        _d_qd_m[i] = static_cast<long>(_d_qd_j(i,0) * 30 * transRatio[i] * directions[i] / PI);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 void QRobot::setHighAdmittancePara()
 {
     _virtualMass << 10, 10, 10, 10, 10, 10;
@@ -537,6 +648,8 @@ void QRobot::setCurrentEncoderAngle(
     }else {
         _q_j[3] = _q_e[3] - _q_z[3];
     }
+
+//    qDebug() << "joint 4 angle is: " << _q_j[3];
 
     _q_j[4] = _q_e[4] - _q_z[4];        // 5关节也是正常运算
 

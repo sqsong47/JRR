@@ -91,6 +91,10 @@ public:
     void dimMask(Eigen::Array<double, 6, 1> array, int dimension);          // 隐藏导纳运动多余的空间运动维数
 
 
+    //*******************测试末端速度********************
+    void testTermVel();
+
+
 private:
     long _d_qd_m[JRR_JOINT_NUMBER];                         // 经导纳运算后，电机待执行的速度
     double _forceBias[JRR_JOINT_NUMBER];                    // 力和力矩的零点偏移

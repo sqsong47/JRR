@@ -4,7 +4,9 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
+# 数据库操作
+
+QT       += core gui sql
 QT       += network
 QT       += serialport
 

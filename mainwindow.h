@@ -12,6 +12,13 @@
 #include "RLS/encoder.h"
 #include "RLS/rasterencoder.h"
 #include "PythonHandler/pythonhandler.h"
+#include <vector>
+#include <fstream>
+#include <queue>
+
+// SQL操作
+#include <QSqlDatabase>
+
 
 namespace Ui {
 class MainWindow;
@@ -78,15 +85,26 @@ private:
     BOOL _isMyoStartFlag;               // Myo启动的标志变量
     BOOL _isTraingFlag;                 // 启动训练的标志变量
 
+
+    bool _isTestVelFlag = false;        // 测试末端速度
+
     // PythonHandler
     PythonHandler* _pyHandler;
     double _virtualDamp;
+
+    // sql操作
+    QSqlDatabase _db;
 
 
 private slots:
     void showError(std::string Msg);    // 显示错误信息
     void mainControlLoop();             // 给_robot输入数据，并做数据处理
     void showSriConfigState();          // 显示力矩传感器的状态
+    bool createConnetion(int time_stamp,
+                         double velocity,
+                         double acceleration,
+                         double jerk,
+                         double B);             // 数据库的链接函数
 
 signals:
     void errorOccur(std::string);       // 错误信号
@@ -114,6 +132,8 @@ private slots:
     void on_ptn_suspendTrain_clicked();
     void on_ptn_startTrain_clicked();
     void on_ptn_activeVM_clicked();
+    void on_ptn_testVel_clicked();
+    void on_ptn_dataBase_clicked();
 };
 
 #endif // MAINWINDOW_H

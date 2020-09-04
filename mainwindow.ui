@@ -606,6 +606,32 @@
      <string>激活VM</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="ptn_testVel">
+    <property name="geometry">
+     <rect>
+      <x>590</x>
+      <y>460</y>
+      <width>111</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>测试末端速度</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="ptn_dataBase">
+    <property name="geometry">
+     <rect>
+      <x>610</x>
+      <y>550</y>
+      <width>121</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>测试数据库</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">

@@ -18,11 +18,7 @@ import tensorflow as tf
 import numpy as np
 import time
 import _thread
-
-
-#####################  hyper parameters  ####################
-
-###############################  DDPG  ####################################
+import pandas as pd
 
 
 class DDPG(object):
@@ -30,7 +26,7 @@ class DDPG(object):
         # 为了在一个类中实现，构造函数不能再传参了，参数全部在run()函数中修改
 
         # 自己加的参数
-        self.admittance = 25.0
+        self.admittance = 10.0
         self.is_episode_done = False
         self.velocity = 0.0
         self.acceleration = 0.0
@@ -39,12 +35,12 @@ class DDPG(object):
         self.episode_reward = 0.0
         self.cpp_online = False
         self.online = False
-        self.velocity_expect = 0.75  # 目标速度
+        self.velocity_expect = 0.55  # 目标速度
         self.is_run_done = 0
         self.step_number = 0
 
-        self.MAX_EPISODES = 5      # 总训练次数
-        self.MAX_EP_STEPS = 120     # 单次训练最长步数  （*0.03）
+        self.MAX_EPISODES = 15  # 总训练次数
+        self.MAX_EP_STEPS = 120  # 单次训练最长步数  （*0.03）
         self.LR_A = 0.001  # learning rate for actor
         self.LR_C = 0.002  # learning rate for critic
         self.GAMMA = 0.9  # reward discount
@@ -54,7 +50,7 @@ class DDPG(object):
 
         self.a_dim = 1  # action的范围是20
         self.s_dim = 2
-        self.a_bound = 20.0
+        self.a_bound = 6.0
         self.memory = np.zeros((self.MEMORY_CAPACITY, self.s_dim * 2 + self.a_dim + 1), dtype=np.float32)
         self.pointer = 0
         self.sess = tf.Session()
@@ -87,9 +83,6 @@ class DDPG(object):
 
     def choose_action(self, s):
         return self.sess.run(self.a, {self.S: s[np.newaxis, :]})[0]
-
-    def test_test(self):
-        return self._test
 
     def learn(self):
         indices = np.random.choice(self.MEMORY_CAPACITY, size=self.BATCH_SIZE)
@@ -133,24 +126,28 @@ class DDPG(object):
         :param jerk: 奖励：加加速度
         :return: 动作和 episode结束标志：返回string，第一位是0/1，标志episode是否结束，其余表示导纳值
         """
+        step_time = time.time()
         self.velocity = velocity
         self.acceleration = acceleration
         self.jerk = jerk
         self.cpp_online = True
-#        time.sleep(2)
-#        print("我把状态更新等了2s")
-        print("v,", self.velocity, "a,", self.acceleration, "B:" ,self.admittance ,"jerk,", self.jerk)
+        #        time.sleep(2)
+        #        print("我把状态更新等了2s")
+        #        print("v,", self.velocity, "a,", self.acceleration, "B:" ,self.admittance ,"jerk,", self.jerk)
+        #        print("in step selfonline before:", self.cpp_online)
         while self.online:
-             time.sleep(0.001)
-#            time.sleep(0.1)
-#            print("step睡了0.1，因为动作选择还没结束")
-#        print("本次step要输出的动作是", self.admittance)
-        if not self.is_episode_done:
-            print("B," , self.admittance)
-            return self.admittance
-        elif self.is_episode_done:
-            print("B--," , self.admittance)
-            return -self.admittance
+            time.sleep(0.001)
+        #            time.sleep(0.1)
+        #             print("step睡了0.1，因为动作选择还没结束")
+        #        print("in step selfonline after:", self.cpp_online)
+        #        print("本次step要输出的动作是", self.admittance)
+
+        if self.is_episode_done:
+            #            print("B--," , -self.admittance)
+            self.admittance = -self.admittance
+
+#        print("python step time:", time.time() * 1000 - step_time * 1000)
+        return self.admittance
 
     def run(self):
         _thread.start_new_thread(self.run_inner, ())
@@ -162,57 +159,63 @@ class DDPG(object):
         """
         self.is_run_done = 0
         # 这里需要先获得状态，取代
-        var = 3  # control exploration
+        var = 1  # control exploration
         t1 = time.time()
-#        print("run 开始")
+        #        print("run 开始")
         for i in range(self.MAX_EPISODES):
             # TODO c++中每个 episode 自动reset
             self.cpp_online = False
+            #            print("in run selfonline:", self.cpp_online)
             while not self.cpp_online:
-                 time.sleep(0.001)
-#                time.sleep(0.5)
-#                print("run等待状态更新0.5s")
+                time.sleep(0.001)
+            #                time.sleep(0.5)
+            #                 print("run等待第一次无用的状态更新0.5s")
             # s = np.array([0, 0])
             ep_reward = 0
             step_number = 1
             self.is_episode_done = False
             last_s = np.array([0.0, 0.0])
             last_a = 0.0
-            self.admittance = 0.0
+            self.admittance = 10.0
             self.step_number = 0
             self.episode_number += 1
-#            print("---------------------------------一次episode开始----------------------------------------------------", self.episode_number)
+            #            print("---------------------------------一次episode开始----------------------------------------------------", self.episode_number)
+            my_time = time.time()
             while not self.is_episode_done:
+#                print("step real time",time.time() - my_time)
+                my_time = time.time()
                 self.cpp_online = False
-#                print("-------------------走进了一次step--------------------------", step_number)
+                #                print("-------------------走进了一次step--------------------------", step_number)
                 while not self.cpp_online:
-                     time.sleep(0.001)
-#                    time.sleep(0.5)
-#                    print("run等待状态更新0.5s")
+                    time.sleep(0.001)
+                #                    time.sleep(0.5)
+                #                     print("run等待状态更新0.5s")
 
                 self.online = True
+                action_select_time = time.time() * 1000
                 step_number += 1
-#                print("step number = ", step_number)
+                #                print("step number = ", step_number)
                 s = np.array([self.velocity, self.acceleration])
                 a = self.choose_action(s)
-#                print("网络里的a:", a)
+                #                print("网络里的a:", a)
 
                 # 测试用 todo
-#                time.sleep(2)
+                #                time.sleep(2)
 
                 # Add exploration noise
                 # 神经网络中训练的是-20~20，这里传输给c++的时候加上25就变成了5~45
-                a = np.clip(np.random.normal(a, var) + 25, 5, 45)
-#                print("加上偏置和噪声的a:", a)
+                a = np.clip(np.random.normal(a, var) + 10.0, 4.0, 16.0)
+                #                print("加上偏置和噪声的a:", a)
 
                 # add randomness to action selection for exploration
-#                while (last_a == a).all() and (last_s == s).all():
-#                    a = self.choose_action(s)
-#                    a = np.clip(np.random.normal(a, var) + 25, 5, 45)
+                #                while (last_a == a).all() and (last_s == s).all():
+                #                    a = self.choose_action(s)
+                #                    a = np.clip(np.random.normal(a, var) + 25, 5, 45)
 
                 self.admittance = a
-#                print("将self的导纳值赋值为神经网络的a")
+                #                print("将self的导纳值赋值为神经网络的a")
                 self.online = False
+#                print("action select time:",time.time() * 1000 - action_select_time)
 
                 last_a = a
                 last_s = s
@@ -226,29 +229,26 @@ class DDPG(object):
 
                 ep_reward += r
                 # 下面是episode结束的条件
-#                print("episode结束？？", self.is_episode_done)
-#                if (abs(self.velocity - self.velocity_expect) <= 0.1 and abs(self.acceleration) <= 0.1):
-                if abs(self.velocity - self.velocity_expect) <= 0.05:
-#                    print("velocity", self.velocity)
-#                    print("velocity_expect", self.velocity_expect)
+                #                print("episode结束？？", self.is_episode_done)
+                if (abs((self.velocity - self.velocity_expect)/self.velocity_expect) <= 0.05 and abs(self.acceleration/self.velocity_expect) <= 0.1):
+                    # if abs(self.velocity - self.velocity_expect) <= 0.05:
+                    #                    print("velocity", self.velocity)
+                    #                    print("velocity_expect", self.velocity_expect)
                     self.episode_reward = ep_reward
                     self.is_episode_done = True
+                    #                    print("episode done 置为True")
                     print("----------------------11111一次episode结束因为速度符合条件----------------------------------")
-#                    print()
-                    # break
 
                 elif step_number >= self.MAX_EP_STEPS:
-#                    print("step_number", step_number)
-#                    print("MAX_EP_STEPS", self.MAX_EP_STEPS)
+                    #                    print("step_number", step_number)
+                    #                    print("MAX_EP_STEPS", self.MAX_EP_STEPS)
                     self.episode_reward = ep_reward
                     self.is_episode_done = True
                     print("----------------------22222一次episode结束因为step 100次----------------------------------")
-                    # break
 
-#        self.is_episode_done = False
-#        print('Running time: ', time.time() - t1)
-#        self.is_run_done = 1
-#        return self.is_run_done
+        # print('Running time: ', time.time() - t1)
+        # self.is_run_done = 1
+        # return self.is_run_done
 
     def show_episode_result(self):
         """
