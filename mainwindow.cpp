@@ -361,7 +361,6 @@ void MainWindow::startRunning()
     long* tmpVel = _robot->getAdmMotorVel();
 
 
-
     // 以下代码为设置PVM的参数和调用PVM的运动函数
     for (WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
     {
@@ -399,10 +398,15 @@ void MainWindow::readJointVelocity()
     _robot->setJointVelocity(joint1, joint2, joint3, joint4, joint5, joint6);
 }
 
+
+// moveToHome()添加了一段代码，其正确性有待验证
 bool MainWindow::moveToHome()       // 里面已经写了激活VM的代码段
 {
 
-    //#define DEBUG_MOVE_TO_HOME
+    // 添加一段机器人读取关节角度的代码，执行该代码会读取实时的编码器数据，已经转为关节角
+    updateJointAngle();
+
+#define DEBUG_MOVE_TO_HOME
 #ifndef DEBUG_MOVE_TO_HOME
     Eigen::Array<double, 6, 1> jointAngle = _robot->getJointAngle();
 
@@ -410,20 +414,8 @@ bool MainWindow::moveToHome()       // 里面已经写了激活VM的代码段
     qDebug() << "joint 1 angle is: " << jointAngle[0];
 #endif
 
-    // 激活VM
-    //    for(WORD i = 0; i < JRR_JOINT_NUMBER; i++)
-    //    {
-    //        _motorDevice->getQMotorObject()->ePOS_ActiveVelocityMode(i+1);
-    //    }
 
-    // 激活PVM,强化学习时需要关闭
-    //    for(WORD i = 0; i < JRR_JOINT_NUMBER; i++)
-    //    {
-    //        _motorDevice->getQMotorObject()->ePOS_ActiveProfileVelocityMode(i+1);
-    //    }
-
-
-
+    // 从关节角计算电机需要的回零行程
     Eigen::Array<long, JRR_JOINT_NUMBER, 1> motorStroke = _robot->calMotorStroke();
 
 #ifndef DEBUG_MOVE_TO_HOME
@@ -438,7 +430,7 @@ bool MainWindow::moveToHome()       // 里面已经写了激活VM的代码段
     for(int i = 0; i < JRR_JOINT_NUMBER; i++)
     {
         // 此时都是正值
-        motorVel[i] = static_cast<long>( _robot->transRatio[i]);
+        motorVel[i] = static_cast<long>( 2 * _robot->transRatio[i]);
     }
 
     // 设置电机的PVM参数
@@ -474,6 +466,7 @@ bool MainWindow::moveToHome()       // 里面已经写了激活VM的代码段
         _motorDevice->getQMotorObject()->ePOS_MoveWithVelocity(i+1, motorVel[i] * sign[i]);
 
         // 使用线程的sleep函数
+
         QThread::msleep(  static_cast<unsigned int>( motionTime[i]));
 
         // 运动完成后，重置为0
@@ -509,7 +502,7 @@ bool MainWindow::createConnetion(int time_stamp,
         return false;
     }
 
-    qDebug() << "IS HERE";
+    //    qDebug() << "IS HERE";
 
     QSqlQuery query;
     query.exec("create table episode_info (time_stamp int primary key, "
@@ -562,9 +555,7 @@ void MainWindow::mainControlLoop()
     // 只有机器人处于Enable状态才能执行下面代码
     if(_robot->_robotState < RobotStates::Enabled){return;}
     if(_isSriStartFlag == false){return;}
-
-    // 更新力信息，已证实执行成功
-    updateForceValue();
+    updateForceValue();    // 更新力信息，已证实执行成功
 
 
 #define DEBUG_FORCE
@@ -595,18 +586,17 @@ void MainWindow::mainControlLoop()
 
 #if OPERATE_MODE == 2
 
-    // 判断是否处于训练过程
-    if(!_isTraingFlag){return;}
-    //    qDebug() << "##########  BEGIN  ##########";
-
-    // 更新关节的速度值,该函数读取电机的转速进而进行关节速度的换算
-    readJointVelocity();
+    if(!_isTraingFlag){return;}     // 判断是否处于训练过程
+    readJointVelocity();    // 更新关节的速度值,该函数读取电机的转速进而进行关节速度的换算
 
 
     // 记录速度/加速度/加加速度
     double velocity = _robot->getVelocity();
     double acceleration = _robot->getAccel();
     double jerk = _robot->getReward();
+
+    double distance = _robot->getDistance();      // 获取走过的位移，以m为单位
+//    qDebug() << "distance in x direction is: " << distance;
 
     // 此时Robot里面已经存储了正确的::<关节角度>---<关节速度>---<力传感器>::信息
     _virtualDamp = _pyHandler->trainOneStep(velocity, acceleration, jerk);
@@ -687,8 +677,9 @@ void MainWindow::mainControlLoop()
                     << " reword: " <<  _robot->getReward();
 #endif
 
-            // 重置jerk为0
+            // 重置jerk为0，改为重置状态，设置速度/加速度和jerk都是0
             _robot->resetJerk();
+
             // 最后一次调用step
             _pyHandler->trainOneStep(0, 0, 0);
 
@@ -1171,6 +1162,10 @@ void MainWindow::on_moveToHome_clicked()
     //    runToHome();
 
     // 使用的是VM做回零动作
+    for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
+    {
+        _motorDevice->getQMotorObject()->ePOS_ActiveProfileVelocityMode(i+1);
+    }
     moveToHome();
 }
 
@@ -1237,9 +1232,16 @@ void MainWindow::on_ptn_startTrain_clicked()
 
 void MainWindow::on_ptn_activeVM_clicked()
 {
-    for(WORD i = 1; i <= JRR_JOINT_NUMBER; i++)
+    // 激活VM
+    //    for(WORD i = 1; i <= JRR_JOINT_NUMBER; i++)
+    //    {
+    //        _motorDevice->getQMotorObject()->ePOS_ActiveVelocityMode(i);
+    //    }
+
+    // 激活PVM
+    for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
     {
-        _motorDevice->getQMotorObject()->ePOS_ActiveVelocityMode(i);
+        _motorDevice->getQMotorObject()->ePOS_ActiveProfileVelocityMode(i+1);
     }
 }
 

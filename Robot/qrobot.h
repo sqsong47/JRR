@@ -63,9 +63,10 @@ public:
     void updateState();                         // 每个时刻读取速度信息后应该更新前两个时刻的速度
 
     // ------------------------------------------------------------------------------------------------
-    double* getForceBias();                                 // 读取零点力偏移
-    double* getForceInSensor();                             // 读取当前的力信息
-    long* getAdmMotorVel();                                 // 读取导纳运动的电机速度
+    double* getForceBias();                     // 读取零点力偏移
+    double* getForceInSensor();                 // 读取当前的力信息
+    long* getAdmMotorVel();                     // 读取导纳运动的电机速度
+    double getDistance();                       // 读取末端在x方向上的位移,以m为单位
 
     // 读取力信息
     double getForceIn_X_Direction();
@@ -139,6 +140,8 @@ private:
     Eigen::Array<double, 6, 1> _rlAcce_t_1;                 // 记录末端上个时刻的加速度值
 
     Eigen::Array<double, 6, 1> _jerk;                       // 记录奖励值，是加速度的一阶向后差分
+    Eigen::Array<double, 3, 1> _fkine_positon;              // 机器人前向动力学的位置矢量，单位为m
+    double _distanceInXdirection;                            // 计算末端在x方向上移动了多少的距离,单位是m
 
 
 signals:

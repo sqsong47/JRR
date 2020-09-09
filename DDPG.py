@@ -35,12 +35,12 @@ class DDPG(object):
         self.episode_reward = 0.0
         self.cpp_online = False
         self.online = False
-        self.velocity_expect = 0.55  # 目标速度
+        self.velocity_expect = 0.35  # 目标速度
         self.is_run_done = 0
         self.step_number = 0
 
         self.MAX_EPISODES = 15  # 总训练次数
-        self.MAX_EP_STEPS = 120  # 单次训练最长步数  （*0.03）
+        self.MAX_EP_STEPS = 60  # 单次训练最长步数  （*0.03）
         self.LR_A = 0.001  # learning rate for actor
         self.LR_C = 0.002  # learning rate for critic
         self.GAMMA = 0.9  # reward discount
@@ -50,7 +50,7 @@ class DDPG(object):
 
         self.a_dim = 1  # action的范围是20
         self.s_dim = 2
-        self.a_bound = 6.0
+        self.a_bound = 10
         self.memory = np.zeros((self.MEMORY_CAPACITY, self.s_dim * 2 + self.a_dim + 1), dtype=np.float32)
         self.pointer = 0
         self.sess = tf.Session()
@@ -126,7 +126,7 @@ class DDPG(object):
         :param jerk: 奖励：加加速度
         :return: 动作和 episode结束标志：返回string，第一位是0/1，标志episode是否结束，其余表示导纳值
         """
-        step_time = time.time()
+        # step_time = time.time()
         self.velocity = velocity
         self.acceleration = acceleration
         self.jerk = jerk
@@ -176,7 +176,7 @@ class DDPG(object):
             self.is_episode_done = False
             last_s = np.array([0.0, 0.0])
             last_a = 0.0
-            self.admittance = 10.0
+            self.admittance = 12.5
             self.step_number = 0
             self.episode_number += 1
             #            print("---------------------------------一次episode开始----------------------------------------------------", self.episode_number)
@@ -204,7 +204,7 @@ class DDPG(object):
 
                 # Add exploration noise
                 # 神经网络中训练的是-20~20，这里传输给c++的时候加上25就变成了5~45
-                a = np.clip(np.random.normal(a, var) + 10.0, 4.0, 16.0)
+                a = np.clip(np.random.normal(a, var) + 14.286, 4.286, 24.286)
                 #                print("加上偏置和噪声的a:", a)
 
                 # add randomness to action selection for exploration
@@ -230,13 +230,13 @@ class DDPG(object):
                 ep_reward += r
                 # 下面是episode结束的条件
                 #                print("episode结束？？", self.is_episode_done)
-                if (abs((self.velocity - self.velocity_expect)/self.velocity_expect) <= 0.05 and abs(self.acceleration/self.velocity_expect) <= 0.1):
+                if abs((self.velocity - self.velocity_expect) / self.velocity_expect) <= 0.05 and abs(self.acceleration / self.velocity_expect) <= 0.1:
                     # if abs(self.velocity - self.velocity_expect) <= 0.05:
-                    #                    print("velocity", self.velocity)
-                    #                    print("velocity_expect", self.velocity_expect)
+                    print("velocity", self.velocity)
+                    print("velocity_expect", self.velocity_expect)
+                    print("acceleration", self.acceleration)
                     self.episode_reward = ep_reward
                     self.is_episode_done = True
-                    #                    print("episode done 置为True")
                     print("----------------------11111一次episode结束因为速度符合条件----------------------------------")
 
                 elif step_number >= self.MAX_EP_STEPS:

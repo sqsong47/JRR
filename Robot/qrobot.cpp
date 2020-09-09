@@ -43,6 +43,9 @@ QRobot::QRobot(QObject *parent) : QObject(parent)
     _rlAcce_t_1         = Eigen::Array<double, 6, 1>::Zero();
     _jerk               = Eigen::Array<double, 6, 1>::Zero();
 
+    _fkine_positon << -0.546, -0.5576, 0;       // 6坐标系的初始位置向量，其实只需要看x方向即可
+    _distanceInXdirection = 0;
+
 
     // 以下代码为机器人的归零程序使用的代码
     _q_z << 220.316, 90.342, 269.614, 327.452, 303.712, 346.535;
@@ -286,9 +289,13 @@ bool QRobot::updateAdmMotionPara(double virtualDamp)
             _c2*_c4 - _c3*_s2*_s4,
             _s5*(_c2*_s4 + _c3*_c4*_s2) + _c5*_s2*_s3;
 
-    // 以下代码分别为计算观测值以及更新观测值
-    solveEnv();
-    updateState();
+    // 计算前向运动学的位置矢量
+    _fkine_positon << (697*_s4*(_s1*_s3 - _c1*_c2*_c3))/1250 - (117*_c4*(_s1*_s3 - _c1*_c2*_c3))/1000 - (429*_c1*_s2)/1000 - (697*_c1*_c4*_s2)/1250 - (117*_c1*_s2*_s4)/1000,
+            (117*_c4*(_c1*_s3 + _c2*_c3*_s1))/1000 - (429*_s1*_s2)/1000 - (697*_s4*(_c1*_s3 + _c2*_c3*_s1))/1250 - (697*_c4*_s1*_s2)/1250 - (117*_s1*_s2*_s4)/1000,
+            (429*_c2)/1000 + (697*_c2*_c4)/1250 + (117*_c2*_s4)/1000 + (117*_c3*_c4*_s2)/1000 - (697*_c3*_s2*_s4)/1250;
+
+    _distanceInXdirection = _fkine_positon[0] - (-0.546);
+
 
     // 雅克比矩阵求逆，用作奇异性检查
     _invJacob = _jacob.inverse();
@@ -297,6 +304,10 @@ bool QRobot::updateAdmMotionPara(double virtualDamp)
         qDebug() << "Jacobian matrix is singular";
         return false;
     }
+
+    // 以下代码分别为计算观测值以及更新观测值
+    solveEnv();
+    updateState();
 
 
     // 这里导纳运算的质点在frame5和frame6 z轴的交点处。
@@ -393,6 +404,11 @@ long *QRobot::getAdmMotorVel()
     return _d_qd_m;
 }
 
+double QRobot::getDistance()
+{
+    return _distanceInXdirection;
+}
+
 double QRobot::getForceIn_X_Direction()
 {
     return _forceX;
@@ -447,6 +463,8 @@ Eigen::Array<double, JRR_JOINT_NUMBER, 1> QRobot::getJointAngle()
 void QRobot::resetJerk()
 {
     _jerk = 0;
+    _rlCarVel_t[0] = 0;
+    _rlAcce_t[0] = 0;
 }
 
 Eigen::Array<double, 6, 1> QRobot::getJointVelocity()

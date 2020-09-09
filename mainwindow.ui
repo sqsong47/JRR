@@ -603,7 +603,7 @@
      </rect>
     </property>
     <property name="text">
-     <string>激活VM</string>
+     <string>激活(P)VM</string>
     </property>
    </widget>
    <widget class="QPushButton" name="ptn_testVel">
