@@ -3,6 +3,7 @@
 #include <iostream>
 #include <QDebug>
 #include <qmath.h>
+#include <iomanip>
 
 #define DEBUG
 
@@ -46,9 +47,9 @@ QRobot::QRobot(QObject *parent) : QObject(parent)
     _fkine_positon << -0.546, -0.5576, 0;       // 6坐标系的初始位置向量，其实只需要看x方向即可
     _distanceInXdirection = 0;
 
-
     // 以下代码为机器人的归零程序使用的代码
-    _q_z << 220.316, 90.342, 269.614, 327.452, 303.712, 346.535;
+//    _q_z << 220.316, 90.342, 269.614, 327.452, 303.712, 346.535;
+    _q_z << 220.316, 90.342 - 1.107, 269.614, 328.663, 307.966, 346.535;
 
     _q_e = Eigen::Array<double, 6, 1>::Zero();
     _q_j = Eigen::Array<double, 6, 1>::Zero();
@@ -217,136 +218,24 @@ bool QRobot::updateAdmMotionPara()  // 主要更新的还是下个时间片的�
 // 利用C++的函数重载功能，带导纳参数的代表用于强化学习的训练阶段
 bool QRobot::updateAdmMotionPara(double virtualDamp)
 {
-    /*
- * 函数应该包含以下几个功能
- * 1. 能够根据导纳值进行导纳速度的输出
-*/
 
-    // 1. 设置导纳参数，先预设各个方向的阻尼值都是一样的，就是传入的阻抗参数
+    // 设置导纳参数，先预设各个方向的阻尼值都是一样的，就是传入的阻抗参数
     Eigen::Array<double, 6, 1> dampArr = virtualDamp * Eigen::Array<double, 6, 1>::Ones();
-
-    // 计算所用的外力 = 采样值 - 零点力偏移
-    _forceX = _rawForce[0] - _forceBias[0];
-    _forceY = _rawForce[1] - _forceBias[1];
-    _forceZ = _rawForce[2] - _forceBias[2];
-    _torX = _rawForce[3] - _forceBias[3];
-    _torY = _rawForce[4] - _forceBias[4];
-    _torZ = _rawForce[5] - _forceBias[5];
-
-    // 实际参与运算的角度应该是关节角加上初始偏置角，由DH坐标系确定
-    _theta1 = qDegreesToRadians(_q_j[0]) + _offsetInit[0];
-    _theta2 = qDegreesToRadians(_q_j[1]) + _offsetInit[1];
-    _theta3 = qDegreesToRadians(_q_j[2]) + _offsetInit[2];
-    _theta4 = qDegreesToRadians(_q_j[3]) + _offsetInit[3];
-    _theta5 = qDegreesToRadians(_q_j[4]) + _offsetInit[4];
-    _theta6 = qDegreesToRadians(_q_j[5]) + _offsetInit[5];
-
-    // 计算当前转角下的cos和sin,数学计算只进行一次,这样可以提高运算速度
-    _s1 = qSin(_theta1);   _c1 = qCos(_theta1);
-    _s2 = qSin(_theta2);   _c2 = qCos(_theta2);
-    _s3 = qSin(_theta3);   _c3 = qCos(_theta3);
-    _s4 = qSin(_theta4);   _c4 = qCos(_theta4);
-    _s5 = qSin(_theta5);   _c5 = qCos(_theta5);
-    _s6 = qSin(_theta6);   _c6 = qCos(_theta6);
-
-
-    // 计算jacobian
-    // 使用的其实是Jacob0;
-    _jacob << (429*_s1*_s2)/1000 - (117*_c4*(_c1*_s3 + _c2*_c3*_s1))/1000 + (697*_s4*(_c1*_s3 + _c2*_c3*_s1))/1250 + (697*_c4*_s1*_s2)/1250 + (117*_s1*_s2*_s4)/1000,
-            -_c1*(_c2*((697*_c4)/1250 + (117*_s4)/1000 + 429/1000.0) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)),
-            -((_c3*_s1 + _c1*_c2*_s3)*(585*_c4 - 2788*_s4))/5000,
-            - (_c1*_c3 - _c2*_s1*_s3)*(_c2*((697*_c4)/1250 + (117*_s4)/1000) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)) - _s2*_s3*((_c1*_s3 + _c2*_c3*_s1)*((117*_c4)/1000 - (697*_s4)/1250) - _s1*_s2*((697*_c4)/1250 + (117*_s4)/1000)),
-            0,
-            0,
-            (697*_s4*(_s1*_s3 - _c1*_c2*_c3))/1250 - (117*_c4*(_s1*_s3 - _c1*_c2*_c3))/1000 - (429*_c1*_s2)/1000 - (697*_c1*_c4*_s2)/1250 - (117*_c1*_s2*_s4)/1000,
-            -_s1*(_c2*((697*_c4)/1250 + (117*_s4)/1000 + 429/1000.0) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)),
-            ((_c1*_c3 - _c2*_s1*_s3)*(585*_c4 - 2788*_s4))/5000,
-            - (_c3*_s1 + _c1*_c2*_s3)*(_c2*((697*_c4)/1250 + (117*_s4)/1000) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)) - _s2*_s3*((_s1*_s3 - _c1*_c2*_c3)*((117*_c4)/1000 - (697*_s4)/1250) + _c1*_s2*((697*_c4)/1250 + (117*_s4)/1000)),
-            0,
-            0,
-            0,
-            (117*_c2*_c3*_c4)/1000 - (697*_c4*_s2)/1250 - (117*_s2*_s4)/1000 - (429*_s2)/1000 - (697*_c2*_c3*_s4)/1250,
-            -(_s2*_s3*(585*_c4 - 2788*_s4))/5000,
-            (117*_c2*_c4)/1000 - (697*_c2*_s4)/1250 - (697*_c3*_c4*_s2)/1250 - (117*_c3*_s2*_s4)/1000,
-            0,
-            0,
-            0,
-            _s1,
-            -_c1*_s2,
-            _c3*_s1 + _c1*_c2*_s3,
-            _s4*(_s1*_s3 - _c1*_c2*_c3) - _c1*_c4*_s2,
-            _c5*(_c3*_s1 + _c1*_c2*_s3) - _s5*(_c4*(_s1*_s3 - _c1*_c2*_c3) + _c1*_s2*_s4),
-            0,
-            -_c1,
-            -_s1*_s2,
-            _c2*_s1*_s3 - _c1*_c3,
-            - _s4*(_c1*_s3 + _c2*_c3*_s1) - _c4*_s1*_s2,
-            _s5*(_c4*(_c1*_s3 + _c2*_c3*_s1) - _s1*_s2*_s4) - _c5*(_c1*_c3 - _c2*_s1*_s3),
-            1,
-            0,
-            _c2,
-            _s2*_s3,
-            _c2*_c4 - _c3*_s2*_s4,
-            _s5*(_c2*_s4 + _c3*_c4*_s2) + _c5*_s2*_s3;
-
-    // 计算前向运动学的位置矢量
-    _fkine_positon << (697*_s4*(_s1*_s3 - _c1*_c2*_c3))/1250 - (117*_c4*(_s1*_s3 - _c1*_c2*_c3))/1000 - (429*_c1*_s2)/1000 - (697*_c1*_c4*_s2)/1250 - (117*_c1*_s2*_s4)/1000,
-            (117*_c4*(_c1*_s3 + _c2*_c3*_s1))/1000 - (429*_s1*_s2)/1000 - (697*_s4*(_c1*_s3 + _c2*_c3*_s1))/1250 - (697*_c4*_s1*_s2)/1250 - (117*_s1*_s2*_s4)/1000,
-            (429*_c2)/1000 + (697*_c2*_c4)/1250 + (117*_c2*_s4)/1000 + (117*_c3*_c4*_s2)/1000 - (697*_c3*_s2*_s4)/1250;
-
-    _distanceInXdirection = _fkine_positon[0] - (-0.546);
-
-
-    // 雅克比矩阵求逆，用作奇异性检查
-    _invJacob = _jacob.inverse();
-    if (_invJacob.norm() > 200)
-    {
-        qDebug() << "Jacobian matrix is singular";
-        return false;
-    }
-
-    // 以下代码分别为计算观测值以及更新观测值
-    solveEnv();
-    updateState();
-
-
-    // 这里导纳运算的质点在frame5和frame6 z轴的交点处。
-    // 使用jacob0时用的是下面的代码
-    // 对比一下转换之后的差别
-    /*
-    _forceInCartesian << _forceX*(_s6*(_s4*(_s1*_s3 - _c1*_c2*_c3) - _c1*_c4*_s2) - _c6*(_c5*(_c4*(_s1*_s3 - _c1*_c2*_c3) + _c1*_s2*_s4) + _s5*(_c3*_s1 + _c1*_c2*_s3)))
-                         + _forceY*(_c6*(_s4*(_s1*_s3 - _c1*_c2*_c3) - _c1*_c4*_s2) + _s6*(_c5*(_c4*(_s1*_s3 - _c1*_c2*_c3) + _c1*_s2*_s4) + _s5*(_c3*_s1 + _c1*_c2*_s3)))
-                         - _forceZ*(_s5*(_c4*(_s1*_s3 - _c1*_c2*_c3) + _c1*_s2*_s4) - _c5*(_c3*_s1 + _c1*_c2*_s3)),
-
-            _forceZ*(_s5*(_c4*(_c1*_s3 + _c2*_c3*_s1) - _s1*_s2*_s4) - _c5*(_c1*_c3 - _c2*_s1*_s3))
-            - _forceX*(_s6*(_s4*(_c1*_s3 + _c2*_c3*_s1) + _c4*_s1*_s2) - _c6*(_c5*(_c4*(_c1*_s3 + _c2*_c3*_s1) - _s1*_s2*_s4) + _s5*(_c1*_c3 - _c2*_s1*_s3)))
-            - _forceY*(_c6*(_s4*(_c1*_s3 + _c2*_c3*_s1) + _c4*_s1*_s2) + _s6*(_c5*(_c4*(_c1*_s3 + _c2*_c3*_s1) - _s1*_s2*_s4) + _s5*(_c1*_c3 - _c2*_s1*_s3))),
-
-            _forceX*(_c6*(_c5*(_c2*_s4 + _c3*_c4*_s2) - _s2*_s3*_s5) + _s6*(_c2*_c4 - _c3*_s2*_s4))
-            - _forceY*(_s6*(_c5*(_c2*_s4 + _c3*_c4*_s2) - _s2*_s3*_s5) - _c6*(_c2*_c4 - _c3*_s2*_s4)) + _forceZ*(_s5*(_c2*_s4 + _c3*_c4*_s2) + _c5*_s2*_s3),
-
-            _torX*(_s6*(_s4*(_s1*_s3 - _c1*_c2*_c3) - _c1*_c4*_s2) - _c6*(_c5*(_c4*(_s1*_s3 - _c1*_c2*_c3) + _c1*_s2*_s4) + _s5*(_c3*_s1 + _c1*_c2*_s3)))
-            + _torY*(_c6*(_s4*(_s1*_s3 - _c1*_c2*_c3) - _c1*_c4*_s2) + _s6*(_c5*(_c4*(_s1*_s3 - _c1*_c2*_c3) + _c1*_s2*_s4) + _s5*(_c3*_s1 + _c1*_c2*_s3)))
-            - _torZ*(_s5*(_c4*(_s1*_s3 - _c1*_c2*_c3) + _c1*_s2*_s4) - _c5*(_c3*_s1 + _c1*_c2*_s3)),
-
-            _torZ*(_s5*(_c4*(_c1*_s3 + _c2*_c3*_s1) - _s1*_s2*_s4) - _c5*(_c1*_c3 - _c2*_s1*_s3))
-            - _torX*(_s6*(_s4*(_c1*_s3 + _c2*_c3*_s1) + _c4*_s1*_s2) - _c6*(_c5*(_c4*(_c1*_s3 + _c2*_c3*_s1) - _s1*_s2*_s4) + _s5*(_c1*_c3 - _c2*_s1*_s3)))
-            - _torY*(_c6*(_s4*(_c1*_s3 + _c2*_c3*_s1) + _c4*_s1*_s2) + _s6*(_c5*(_c4*(_c1*_s3 + _c2*_c3*_s1) - _s1*_s2*_s4) + _s5*(_c1*_c3 - _c2*_s1*_s3))),
-
-            _torX*(_c6*(_c5*(_c2*_s4 + _c3*_c4*_s2) - _s2*_s3*_s5) + _s6*(_c2*_c4 - _c3*_s2*_s4))
-            - _torY*(_s6*(_c5*(_c2*_s4 + _c3*_c4*_s2) - _s2*_s3*_s5) - _c6*(_c2*_c4 - _c3*_s2*_s4)) + _torZ*(_s5*(_c2*_s4 + _c3*_c4*_s2) + _c5*_s2*_s3);
-    */
-
-    // 只做x轴的平移运动
-    // dimMask(_forceInCartesian, 1);
-
-    // 训练过程需要将其置为5
-    //    _forceInCartesian[0] = 5;
-
-    _forceInCartesian << 5, 0, 0, 0, 0, 0;
+    _forceInCartesian << 5, 0, 0, 0, 0, 0;              // 只有延x轴方向有力
 
     // 根据传入的阻抗进行导纳速度的更新
     _velocity = (TS * 0.001 * _forceInCartesian + _virtualMass * _lastVelocity) / (_virtualMass + dampArr * TS * 0.001);
+
+
+#define DEUBG_ADM_PARA
+#ifndef DEUBG_ADM_PARA
+//    std::cout << "Dampling: " << dampArr.transpose() << std::endl;
+//    std::cout << "Force in cartessian: " << _forceInCartesian[0] << std::endl;
+    std::cout << std::setw(16) << "last_velocity  velocity" << std::setw(16) <<
+                 _lastVelocity.transpose()[0] << std::setw(16) << _velocity.transpose()[0] << std::endl;
+#endif
+
+
     _lastVelocity = _velocity;
 
     // 反算期望的关节速度，rad/s
@@ -357,6 +246,7 @@ bool QRobot::updateAdmMotionPara(double virtualDamp)
         // 反算关节电机的速度，单位是rpm  经实验验证是对的
         _d_qd_m[i] = static_cast<long>(_d_qd_j(i,0) * 30 * transRatio[i] * directions[i] / PI);
     }
+
 
     // 至此已经计算出来电机应该执行的速度
     return true;
@@ -460,11 +350,114 @@ Eigen::Array<double, JRR_JOINT_NUMBER, 1> QRobot::getJointAngle()
 
 }
 
-void QRobot::resetJerk()
+void QRobot::resetMotionInfo()
 {
-    _jerk = 0;
-    _rlCarVel_t[0] = 0;
-    _rlAcce_t[0] = 0;
+    // 清空速度/加速度/加加速度
+    _jerk = Eigen::Array<double, 6, 1>::Zero();
+
+    _rlCarVel_t = Eigen::Array<double, 6, 1>::Zero();
+    _rlCarVel_t_1 = Eigen::Array<double, 6, 1>::Zero();
+
+    _rlAcce_t = Eigen::Array<double, 6, 1>::Zero();
+    _rlAcce_t_1 = Eigen::Array<double, 6, 1>::Zero();
+
+    // 重置导纳运动速度
+    _velocity = 0;
+    _lastVelocity = 0;
+}
+
+
+// 将原有的导纳控制程序进行分解，前一部分计算jacobian和更新速度/加速度/jerk的代码移入到该部分中
+void QRobot::updateCartesianVel()
+{
+
+    // 实际参与运算的角度应该是关节角加上初始偏置角，由DH坐标系确定
+    _theta1 = qDegreesToRadians(_q_j[0]) + _offsetInit[0];
+    _theta2 = qDegreesToRadians(_q_j[1]) + _offsetInit[1];
+    _theta3 = qDegreesToRadians(_q_j[2]) + _offsetInit[2];
+    _theta4 = qDegreesToRadians(_q_j[3]) + _offsetInit[3];
+    _theta5 = qDegreesToRadians(_q_j[4]) + _offsetInit[4];
+    _theta6 = qDegreesToRadians(_q_j[5]) + _offsetInit[5];
+
+#define DEBUG_THETA
+#ifndef DEBUG_THETA
+    qDebug() << "Joint angles 1-6 are:" << _theta1 << " " <<  _theta2 << " " <<  _theta3 << " " <<
+                _theta4 << " " <<  _theta5 << " " <<  _theta6;
+#endif
+
+    // 计算当前转角下的cos和sin,数学计算只进行一次,这样可以提高运算速度
+    _s1 = qSin(_theta1);   _c1 = qCos(_theta1);
+    _s2 = qSin(_theta2);   _c2 = qCos(_theta2);
+    _s3 = qSin(_theta3);   _c3 = qCos(_theta3);
+    _s4 = qSin(_theta4);   _c4 = qCos(_theta4);
+    _s5 = qSin(_theta5);   _c5 = qCos(_theta5);
+    _s6 = qSin(_theta6);   _c6 = qCos(_theta6);
+
+
+    // 计算jacobian
+    // 使用的其实是Jacob0;
+    _jacob << (429*_s1*_s2)/1000 - (117*_c4*(_c1*_s3 + _c2*_c3*_s1))/1000 + (697*_s4*(_c1*_s3 + _c2*_c3*_s1))/1250 + (697*_c4*_s1*_s2)/1250 + (117*_s1*_s2*_s4)/1000,
+            -_c1*(_c2*((697*_c4)/1250 + (117*_s4)/1000 + 429/1000.0) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)),
+            -((_c3*_s1 + _c1*_c2*_s3)*(585*_c4 - 2788*_s4))/5000,
+            - (_c1*_c3 - _c2*_s1*_s3)*(_c2*((697*_c4)/1250 + (117*_s4)/1000) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)) - _s2*_s3*((_c1*_s3 + _c2*_c3*_s1)*((117*_c4)/1000 - (697*_s4)/1250) - _s1*_s2*((697*_c4)/1250 + (117*_s4)/1000)),
+            0,
+            0,
+            (697*_s4*(_s1*_s3 - _c1*_c2*_c3))/1250 - (117*_c4*(_s1*_s3 - _c1*_c2*_c3))/1000 - (429*_c1*_s2)/1000 - (697*_c1*_c4*_s2)/1250 - (117*_c1*_s2*_s4)/1000,
+            -_s1*(_c2*((697*_c4)/1250 + (117*_s4)/1000 + 429/1000.0) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)),
+            ((_c1*_c3 - _c2*_s1*_s3)*(585*_c4 - 2788*_s4))/5000,
+            - (_c3*_s1 + _c1*_c2*_s3)*(_c2*((697*_c4)/1250 + (117*_s4)/1000) + _c3*_s2*((117*_c4)/1000 - (697*_s4)/1250)) - _s2*_s3*((_s1*_s3 - _c1*_c2*_c3)*((117*_c4)/1000 - (697*_s4)/1250) + _c1*_s2*((697*_c4)/1250 + (117*_s4)/1000)),
+            0,
+            0,
+            0,
+            (117*_c2*_c3*_c4)/1000 - (697*_c4*_s2)/1250 - (117*_s2*_s4)/1000 - (429*_s2)/1000 - (697*_c2*_c3*_s4)/1250,
+            -(_s2*_s3*(585*_c4 - 2788*_s4))/5000,
+            (117*_c2*_c4)/1000 - (697*_c2*_s4)/1250 - (697*_c3*_c4*_s2)/1250 - (117*_c3*_s2*_s4)/1000,
+            0,
+            0,
+            0,
+            _s1,
+            -_c1*_s2,
+            _c3*_s1 + _c1*_c2*_s3,
+            _s4*(_s1*_s3 - _c1*_c2*_c3) - _c1*_c4*_s2,
+            _c5*(_c3*_s1 + _c1*_c2*_s3) - _s5*(_c4*(_s1*_s3 - _c1*_c2*_c3) + _c1*_s2*_s4),
+            0,
+            -_c1,
+            -_s1*_s2,
+            _c2*_s1*_s3 - _c1*_c3,
+            - _s4*(_c1*_s3 + _c2*_c3*_s1) - _c4*_s1*_s2,
+            _s5*(_c4*(_c1*_s3 + _c2*_c3*_s1) - _s1*_s2*_s4) - _c5*(_c1*_c3 - _c2*_s1*_s3),
+            1,
+            0,
+            _c2,
+            _s2*_s3,
+            _c2*_c4 - _c3*_s2*_s4,
+            _s5*(_c2*_s4 + _c3*_c4*_s2) + _c5*_s2*_s3;
+
+    // 计算前向运动学的位置矢量
+    _fkine_positon << (697*_s4*(_s1*_s3 - _c1*_c2*_c3))/1250 - (117*_c4*(_s1*_s3 - _c1*_c2*_c3))/1000 - (429*_c1*_s2)/1000 - (697*_c1*_c4*_s2)/1250 - (117*_c1*_s2*_s4)/1000,
+            (117*_c4*(_c1*_s3 + _c2*_c3*_s1))/1000 - (429*_s1*_s2)/1000 - (697*_s4*(_c1*_s3 + _c2*_c3*_s1))/1250 - (697*_c4*_s1*_s2)/1250 - (117*_s1*_s2*_s4)/1000,
+            (429*_c2)/1000 + (697*_c2*_c4)/1250 + (117*_c2*_s4)/1000 + (117*_c3*_c4*_s2)/1000 - (697*_c3*_s2*_s4)/1250;
+    _distanceInXdirection = _fkine_positon[0] - (-0.546);   // 保存笛卡尔坐标系下末端沿着x轴的位移
+
+
+    // 雅克比矩阵求逆，用作奇异性检查
+    _invJacob = _jacob.inverse();
+    if (_invJacob.norm() > 200)
+    {
+        qDebug() << "Jacobian matrix is singular";
+        return;
+    }
+
+    // 以下代码分别为计算观测值以及更新观测值
+    solveEnv();
+
+#define DEBUG_RLAVL_CARTESSIAN
+#ifndef DEBUG_RLAVL_CARTESSIAN
+    // std::cout << std::setw(24) << "velocity     last_velocity" << std::setw(16) << _rlCarVel_t[0] << std::setw(16) << _rlCarVel_t_1[0] << std::endl;
+    std::cout << std::setw(24) << "accel     last_accel" << std::setw(16) << _rlAcce_t[0] << std::setw(16) << _rlAcce_t_1[0] << std::endl;
+#endif
+
+    updateState();
 }
 
 Eigen::Array<double, 6, 1> QRobot::getJointVelocity()
@@ -472,7 +465,7 @@ Eigen::Array<double, 6, 1> QRobot::getJointVelocity()
     return _rlJointVelocity;
 }
 
-double QRobot::getReward()
+double QRobot::getJerk()
 {
     // 返回jerk的绝对值作为奖励
     return qFabs( _jerk[0]);
@@ -667,7 +660,7 @@ void QRobot::setCurrentEncoderAngle(
         _q_j[3] = _q_e[3] - _q_z[3];
     }
 
-//    qDebug() << "joint 4 angle is: " << _q_j[3];
+    //    qDebug() << "joint 4 angle is: " << _q_j[3];
 
     _q_j[4] = _q_e[4] - _q_z[4];        // 5关节也是正常运算
 
@@ -701,15 +694,28 @@ void QRobot::setJointVelocity(long v1, long v2, long v3,
     {
         _rlJointVelocity[i] = tmpMotorVel[i] / transRatio[i] * directions[i];
     }
+
+#define DEBUG_JOINT_VELOCITY
+#ifndef DEBUG_JOINT_VELOCITY
+    std::cout << "joint velocity(deg/s) is: " << _rlJointVelocity.transpose() / PI * 180 << std::endl;
+#endif
+
 }
 
 void QRobot::solveEnv()
 {
     // 以下代码计算末端笛卡尔速度/加速度/加加速度
     // 注意下面的_velocity和_lastVelocity导纳运动期望输出的速度，和这里真实计算的是有偏差的
-    _rlCarVel_t = _jacob * _rlJointVelocity.matrix();
-    _rlAcce_t = (_rlCarVel_t - _rlCarVel_t_1) / TS;
-    _jerk = (_rlAcce_t - _rlAcce_t_1) / TS;
+    _rlCarVel_t = _jacob * _rlJointVelocity.matrix();       // 单位是m/s
+    _rlAcce_t = (_rlCarVel_t - _rlCarVel_t_1) / TS * 1000;  // 单位是m/s^2
+    _jerk = (_rlAcce_t - _rlAcce_t_1) / TS * 1000;          // 单位是m/s^3
+
+
+#define DEBUG_VAJ_CARTESSIAN
+#ifndef DEBUG_VAJ_CARTESSIAN
+    std::cout << "v a j in x direction is: " << std::setw(16) << _rlCarVel_t[0]
+              << std::setw(16) << _rlAcce_t[0] << std::setw(16) << qAbs( _jerk[0]) << std::endl;
+#endif
 }
 
 void QRobot::updateState()

@@ -8,9 +8,11 @@
 #include <QThread>
 #include <time.h>
 #include <string>
+#include <iomanip>
 
 #include <QSqlError>
 #include <QSqlQuery>
+
 
 
 /* 条件编译指令，可进行扩展
@@ -163,9 +165,9 @@ MainWindow::MainWindow(QWidget *parent) :
     _robot = new QRobot(this);
 
     // --------------------------QTimer---------------------------------
-    _timer = new QTimer(this);
-    connect(_timer,SIGNAL(timeout()),this,SLOT(mainControlLoop()));
-    _timer->start(TS); // 控制周期为30ms
+    _timer_control = new QTimer(this);
+    connect(_timer_control,SIGNAL(timeout()),this,SLOT(mainControlLoop()));
+    _timer_control->start(TS); // 控制周期为30ms
 
 
     //----------------------------ERROR---------------------------------
@@ -177,6 +179,7 @@ MainWindow::MainWindow(QWidget *parent) :
     _isInAdmittanceFlag = FALSE;
     _isMyoStartFlag = FALSE;
     _isTraingFlag = FALSE;
+    _isDangerFlag = FALSE;
 
     // ------------------------------------------------------------------
     QStringList jointSel = {"joint 1","joint 2","joint 3","joint 4","joint 5","joint 6"};
@@ -291,7 +294,7 @@ MainWindow::~MainWindow()
     delete _motorDevice;
     delete _sriDevice;
     delete _robot;
-    delete _timer;
+    delete _timer_control;
 
     // 自动析构？
     //    delete _pyHandler;
@@ -360,37 +363,36 @@ void MainWindow::startRunning()
     // 在启动按钮的槽函数下已经激活了PVM，这里直接设置参数使用就可以了
     long* tmpVel = _robot->getAdmMotorVel();
 
-
     // 以下代码为设置PVM的参数和调用PVM的运动函数
     for (WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
     {
         _motorDevice->getQMotorObject()->ePOS_SetVelocityProfile(
-                    i+1, static_cast<DWORD>(10 * tmpVel[i]),
-                    static_cast<DWORD>(10 * tmpVel[i]));
+                    i+1, static_cast<DWORD>(40 * tmpVel[i]),
+                    static_cast<DWORD>(40 * tmpVel[i]));
         _motorDevice->getQMotorObject()->ePOS_MoveWithVelocity(i+1, tmpVel[i]);
     }
-
-
-    // 现在直接改成VM的运动模式
-    //    for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
-    //    {
-    //        // 使用VM进行机器人运动
-    //        _motorDevice->getQMotorObject()->ePOS_SetVelocityMust(i+1, tmpVel[i]);
-    //    }
 }
 
 void MainWindow::readJointVelocity()
 {
     // 注意这里的速度是电机的速度，需要进行传动比的转换才能映射到关节速度上
     long joint1, joint2, joint3, joint4, joint5, joint6;
-    if(!_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(1, joint1)
-            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(2, joint2)
-            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(3, joint3)
-            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(4, joint4)
-            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(5, joint5)
-            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(6, joint6))
+
+    //     读取速度应该用平均值，使用ePOS_GetVelocityIs()可能存在一些数值方面的问题
+    if(!_motorDevice->getQMotorObject()->ePOS_GetVelocityIsAveraged(1, joint1)
+            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIsAveraged(2, joint2)
+            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIsAveraged(3, joint3)
+            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIsAveraged(4, joint4)
+            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIsAveraged(5, joint5)
+            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIsAveraged(6, joint6))
+        //    if(!_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(1, joint1)
+        //            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(2, joint2)
+        //            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(3, joint3)
+        //            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(4, joint4)
+        //            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(5, joint5)
+        //            || !_motorDevice->getQMotorObject()->ePOS_GetVelocityIs(6, joint6))
     {
-        // qDebug() << "Fail to read joint velocity";
+        qDebug() << "Fail to read joint velocity";
         return;
     }
 
@@ -414,14 +416,12 @@ bool MainWindow::moveToHome()       // 里面已经写了激活VM的代码段
     qDebug() << "joint 1 angle is: " << jointAngle[0];
 #endif
 
-
     // 从关节角计算电机需要的回零行程
     Eigen::Array<long, JRR_JOINT_NUMBER, 1> motorStroke = _robot->calMotorStroke();
 
 #ifndef DEBUG_MOVE_TO_HOME
     std::cout << "motor stroke 1 is: " << motorStroke.transpose()[0] << std::endl;
 #endif
-
 
     auto sign = Eigen::sign(motorStroke);
 
@@ -441,7 +441,6 @@ bool MainWindow::moveToHome()       // 里面已经写了激活VM的代码段
         _motorDevice->getQMotorObject()->ePOS_SetVelocityProfile(i+1,ProfileAcceleration,ProfileDeceleration);
     }
 
-
     // 计算每个电机需要运转的时间------------------------>ERROE
     Eigen::Array<long, 6, 1> motionTime;
     for(int i = 0; i < 6; i++)
@@ -455,24 +454,17 @@ bool MainWindow::moveToHome()       // 里面已经写了激活VM的代码段
     std::cout << "motion time is: " << motionTime.transpose()[0] << std::endl;
 #endif
 
-
     // 接下来根据此时间让电机开始运动，这里是六个电机依次运动，可能有点不是很合理
     for(WORD i = 0; i < JRR_JOINT_NUMBER; i++)
     {
-        // 开始运动
-        //        _motorDevice->getQMotorObject()->ePOS_SetVelocityMust(i+1, motorVel[i] * sign[i]);
-
         // 使用PVM的运动代码
         _motorDevice->getQMotorObject()->ePOS_MoveWithVelocity(i+1, motorVel[i] * sign[i]);
 
         // 使用线程的sleep函数
-
         QThread::msleep(  static_cast<unsigned int>( motionTime[i]));
 
         // 运动完成后，重置为0
-        //        _motorDevice->getQMotorObject()->ePOS_SetVelocityMust(i+1, 0);
         _motorDevice->getQMotorObject()->ePOS_MoveWithVelocity(i+1, 0);
-
     }
 
 
@@ -482,8 +474,6 @@ bool MainWindow::moveToHome()       // 里面已经写了激活VM的代码段
     _motorDevice->getQMotorObject()->ePOS_GetVelocityMust(1, veltmp);
     qDebug() << "final velocity is: " << veltmp;
 #endif
-
-
 
     qDebug() << "Homing finished";
     ui->textEdit_screen->append("Homing Finished");
@@ -531,32 +521,73 @@ void MainWindow::showError(std::string Msg)
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 // ***********************************************************************************
 // 更新robot中的数据,机器人的主控制循环
 void MainWindow::mainControlLoop()
 {
-    // 通过编码器更新关节角度，已证实执行成功
-    updateJointAngle();
+#ifndef DEBUG_TIME_BETWEEN_LOOP
+    // 查看两次控制循环之间的时间间隔，发现在60ms以上，偶尔有一些间隔能达到120ms
+    static clock_t loop_first = clock();
+    qDebug() << "time between two loop is: " << clock() - loop_first;
+    loop_first = clock();
+#endif
 
+
+#define DEBUG_LOOP_TIME
+#ifndef DEBUG_LOOP_TIME
+    // 在没有让电机运动的情况下，计算一个loop的时间，发现也是在4-6ms，没有超过预设的TS
+    clock_t loop_start = clock();
+#endif
+
+
+#define DEBUG_READ_TIME
+#ifndef DEBUG_READ_TIME
+    // 统计一个控制周期中，传感器读取数据所花费的时间
+    // 大概会花费4-5ms的时间，该时间包括了： 读取编码器数据的时间 + 读取力传感器数据的时间 + 读取电机转速的时间
+    int read_time = clock();
+#endif
+
+    updateJointAngle();     // 通过编码器更新关节角度，已证实执行成功
 
 #define DEBUG_ANGLE
 #ifndef DEBUG_ANGLE
     // 检查关节角度是否正确
-    Eigen::Array<double, 6, 1> jointAngle = _robot->getJointAngle();
-    //    for(int i = 0; i < 6; ++i)
-    //    {
-    //        qDebug() << tr("joint %1 angle is : %2").arg(i+1).arg(jointAngle[i]);
-    //    }
+    {
+        Eigen::Array<double, 6, 1> jointAngle = _robot->getJointAngle();
+        //        for(int i = 0; i < 6; ++i)
+        //        {
+        //            qDebug() << tr("joint %1 angle is : %2").arg(i+1).arg(jointAngle[i]);
+        //        }
 
-    // 输出4关节的关节角
-    qDebug() << "joint 4 angle is: " << jointAngle[3];
+        // 输出3关节的关节角
+        {
+            static int i = 0;
+            if(i % 25 == 0)
+            {
+                // std::cout << "joint 1 and 4 angle is: " << std::setw(16) << jointAngle[0]  << std::setw(16) << jointAngle[3] << std::endl;
+                // std::cout << "joint 3 angle is: " << jointAngle[2] << std::endl;
+                std::cout << "joint angle is: " << jointAngle.transpose() << std::endl;
+            }
+            i++;
+        }
+    }
 #endif
 
     // 只有机器人处于Enable状态才能执行下面代码
     if(_robot->_robotState < RobotStates::Enabled){return;}
     if(_isSriStartFlag == false){return;}
     updateForceValue();    // 更新力信息，已证实执行成功
-
 
 #define DEBUG_FORCE
 #ifndef DEBUG_FORCE
@@ -586,125 +617,122 @@ void MainWindow::mainControlLoop()
 
 #if OPERATE_MODE == 2
 
+#ifndef DEBUG_EPISODE_TIME
+    static int time_start = clock();      // 对episode进行计时
+#endif
+
+    // 强化学习任务中，只有1关节和4关节可能到达限位
+    Eigen::Array<double, 6, 1> jointAngle = _robot->getJointAngle();
+    if(jointAngle[0] >= 110 || jointAngle[3] >= 44)
+    {
+        _isDangerFlag = TRUE;
+    }
+
     if(!_isTraingFlag){return;}     // 判断是否处于训练过程
-    readJointVelocity();    // 更新关节的速度值,该函数读取电机的转速进而进行关节速度的换算
+    readJointVelocity();            // 通过读取到的电机速度计算关节速度
+    _robot->updateCartesianVel();   // 计算jacobian，并更新末端的速度/加速度和jerk
 
-
-    // 记录速度/加速度/加加速度
+    // 只有先执行了_robot->updateCartesianVel() 才能进行以下函数的调用
     double velocity = _robot->getVelocity();
     double acceleration = _robot->getAccel();
-    double jerk = _robot->getReward();
+    double jerk = _robot->getJerk();
+    // double distance = _robot->getDistance();      // 获取走过的位移，以m为单位
 
-    double distance = _robot->getDistance();      // 获取走过的位移，以m为单位
-//    qDebug() << "distance in x direction is: " << distance;
+    // 暂时这么写，后期待优化
+    if(_isDangerFlag){
+        velocity = 404;
+    }
+
+#ifndef DEBUG_READ_TIME
+    // 1次数据库操作的时间小于1ms
+    qDebug() << "read time is: " << clock() - read_time;
+#endif
 
     // 此时Robot里面已经存储了正确的::<关节角度>---<关节速度>---<力传感器>::信息
     _virtualDamp = _pyHandler->trainOneStep(velocity, acceleration, jerk);
 
+#define DEBUG_DATABASE_TIME
+#ifndef DEBUG_DATABASE_TIME
+    clock_t dataBase_time = clock();
+#endif
+
     // 数据库操作
-    static int i = 0;
-    createConnetion(i++, velocity, acceleration, jerk, _virtualDamp);
+    static int master_key = 0;
+    createConnetion(master_key++, velocity, acceleration, jerk, _virtualDamp);
 
-
-#define DEBUG3
-#ifndef DEBUG3
-    static int i = 0;
-    i++;
-    _virtualDamp = _pyHandler->trainOneStep(1 + i, 2 + i, 3 + i);
-#endif
-
-
-#define DEBUG1
-#ifndef DEBUG1
-    // 输出强化学习的相关信息
-
-    qDebug()
-            << "  Admittance: " << _virtualDamp
-            << " vel: " << _robot->getVelocity()
-            << " accel: " << _robot->getAccel()
-            << " reword: " <<  _robot->getReward();
-
-#endif
-
-
-#define DEBUG2
-#ifndef DEBUG2
-    // 输出导纳值
-    qDebug() << "Admittance: " << _virtualDamp;
+#ifndef DEBUG_DATABASE_TIME
+    qDebug() << "DataBase time is: " << clock() - dataBase_time;
 #endif
 
     // 根据_virtualDamp的值判断episode是否已经完成，一个episode结束到另一个episode开始的状态重置代码都在下面
     // 重置状态主要指的是机器人要回零
     if (_virtualDamp < 0)
     {
-        // 暂停训练，从主循环退出
-        _isTraingFlag = false;
-        qDebug() << "episode finished" ;
 
+#ifndef DEBUG_EPISODE_TIME
+        qDebug() << "episode time is: " << clock() - time_start;
+#endif
+
+        // qDebug() << "episode finished";
 
         // 每个episode结束时，设置速度为0
         for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
         {
-            _motorDevice->getQMotorObject()->ePOS_MoveWithVelocity(i+1, 0);
+            _motorDevice->getQMotorObject()->ePOS_MoveWithVelocity(i+1, 0);     // 减速过程的加速度应该是以上一次配置的参数为准
         }
 
         // 暂停1s
         QThread::sleep(1);
-
-
         if(moveToHome())
         {
-            qDebug() << "episode wait " ;
-
-#define PVM
-#ifndef PVM
-            // 由于回零程序还有导纳控制的程序都采用的是VM的模式，现在程序中不需要再额外的添加状态切换代码
-            // 设置电机的工作模式为PVM
-            for(WORD i = 1; i <= 6; ++i)
-            {
-                _motorDevice->getQMotorObject()->ePOS_ActiveProfileVelocityMode(i);
-            }
-#endif
-
-
-#define DEBUG4
-#ifndef DEBUG4
-            // 置标志变量为true
-            qDebug()<< "episode: "
-                    << " Admittance: " << _virtualDamp
-                    << " vel: " << _robot->getVelocity()
-                    << " accel: " << _robot->getAccel()
-                    << " reword: " <<  _robot->getReward();
-#endif
-
-            // 重置jerk为0，改为重置状态，设置速度/加速度和jerk都是0
-            _robot->resetJerk();
-
-            // 最后一次调用step
-            _pyHandler->trainOneStep(0, 0, 0);
-
-            // 加入数据库的episode结束的标志位
-            createConnetion(i++, 99.0, 99.0, 99.0, 99.0);
-
-            // 置标志量为true，开启下次训练
-            _isTraingFlag = true;
+            // qDebug() << "episode wait " ;
+            QThread::msleep(750);               // 线程睡眠750s
+            _robot->resetMotionInfo();          // 重置jerk为0，改为重置状态，设置速度/加速度和jerk都是0
+            _pyHandler->trainOneStep(0, 0, 0);  // 最后一次调用step
+            createConnetion(master_key++, 99.0, 99.0, 99.0, _virtualDamp);  // 加入数据库的episode结束的标志位
+            _isDangerFlag = FALSE;              // 重置标志变量为false
         }
+
+        qDebug() << "-------------------episode start----------------------------";
+
+#ifndef DEBUG_EPISODE_TIME
+        time_start = clock();
+#endif
+
         return;
     }
 
     // 更新电机运动参数
     if(!_robot->updateAdmMotionPara(_virtualDamp))
+        //    if(!_robot->updateAdmMotionPara(20))
     {
         return;
     }
 
-    // 电机运动，等测试完之后再打开相应代码
-    startRunning();
+#define DEBUG_MOTOR_TIME
+#ifndef DEBUG_MOTOR_TIME
+    // 电机的运动时间大概是4-6ms左右
+    clock_t run_time = clock();
 #endif
+
+    // startRunning();     // 电机运动，等测试完之后再打开相应代码
+
+#ifndef DEBUG_MOTOR_TIME
+    qDebug() << "running time is: " << clock() - run_time;
+#endif
+
+#ifndef DEBUG_LOOP_TIME
+    qDebug() << "single loop time is: " << clock() - loop_start;
+#endif
+
+#endif
+
+
+
 
 #if OPERATE_MODE == 3
 
-    // 很危险
+    // 很危险,因为没有运动停止的代码，所以一般不要打开，该代码只是为了测试末端速度
 
     if(!_isTestVelFlag)
     {
@@ -720,6 +748,8 @@ void MainWindow::mainControlLoop()
     startRunning();
 
 #endif
+
+
 
     //----------------------------------------------------------------------
 }
@@ -937,15 +967,6 @@ void MainWindow::on_pushButton_moveForward_pressed()
     double jointVelocity = ui->spinBox_velocity->value() / 10.0;            // 设置为0-12rpm
     double motorVelocity = jointVelocity * _robot->transRatio[currentJointSel-1];           // 关节速度映射到电机转速
 
-    // 使用VM模式做匀速运动，因为感觉VM的PID应该更好一点
-    /*
-    if(_motorDevice->getQMotorObject()->ePOS_ActiveVelocityMode(currentJointSel)            // 激活PV
-            && _motorDevice->getQMotorObject()->ePOS_SetVelocityMust(currentJointSel, static_cast<long>(motorVelocity * _robot->directions[currentJointSel-1])))
-    {
-        _robot->_robotState = RobotStates::Released;
-        return;
-    }
-    */
 
 
     // 以下为使用PVM做速度控制
@@ -1159,7 +1180,7 @@ void MainWindow::on_setAdmittancePara_clicked()
 
 void MainWindow::on_moveToHome_clicked()
 {
-    //    runToHome();
+    //        runToHome();
 
     // 使用的是VM做回零动作
     for(WORD i = 0; i < JRR_JOINT_NUMBER; ++i)
@@ -1190,21 +1211,8 @@ void MainWindow::on_ptn_pythonInit_clicked()
 
 void MainWindow::on_ptn_suspendTrain_clicked()
 {
-
-    // 观测状态，进行最后一步训练训练
-    ;
-
-    // 调用停止训练的接口函数
-    // _pyHandler->suspendTrain();
-
     // 置标志变量为False，停止导纳运动
     _isTraingFlag = FALSE;
-
-    // 可能需要一个延时函数
-    _motorThread->msleep(1000);
-
-    // 执行机器人的归零程序
-    runToHome();
 }
 
 void MainWindow::on_ptn_startTrain_clicked()

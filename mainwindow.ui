@@ -583,8 +583,8 @@
    <widget class="QPushButton" name="ptn_suspendTrain">
     <property name="geometry">
      <rect>
-      <x>600</x>
-      <y>370</y>
+      <x>220</x>
+      <y>420</y>
       <width>111</width>
       <height>51</height>
      </rect>

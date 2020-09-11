@@ -79,13 +79,16 @@ private:
     MagnecticRLS* _rlsJoint6;
 
     QRobot* _robot;                     // 运算控制器
-    QTimer* _timer;                     // 主控制的定时器
+    QTimer* _timer_control;             // 主控制的定时器
+    QTimer* _timer_update_info;         // 更新机器人和电机数据的定时器，其频率需要很高
+
+
     BOOL _isSriStartFlag;               // 传感器启动的标志标量
     BOOL _isInAdmittanceFlag;           // 导纳模式的标志变量
     BOOL _isMyoStartFlag;               // Myo启动的标志变量
     BOOL _isTraingFlag;                 // 启动训练的标志变量
 
-
+    BOOL _isDangerFlag;                 // 关节接近限位的标志变量
     bool _isTestVelFlag = false;        // 测试末端速度
 
     // PythonHandler

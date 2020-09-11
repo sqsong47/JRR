@@ -80,13 +80,16 @@ public:
     Eigen::Array<double, 6, 1> getVirtualMassVector();                      // 读取虚拟质量
     Eigen::Array<double, 6, 1> getVirtualDampVector();                      // 读取虚拟阻尼
     Eigen::Array<double, JRR_JOINT_NUMBER, 1> getJointAngle();              // 读取关节角
-    void resetJerk();                                                       // 重置jerk为零
+
+
+    void resetMotionInfo();                                                       // 重置jerk为零，里面其实还有速度和加速度也重置为0
+    void updateCartesianVel();                                              // 更新笛卡尔坐标系下末端点的速度加速度和加加速度
 
     /*************************************************************************************************/
 
     Eigen::Array<double, 6, 1> getJointVelocity();                          // 读取实时的关节速度，此函数可能有点多余
 
-    double getReward();                                                     // 返回jerk的第一个元素，作为奖励值
+    double getJerk();                                                     // 返回jerk的第一个元素，作为奖励值
     double getAccel();                                                      // 返回加速度值作为环境状态的观测量
     double getVelocity();                                                   // 返回当前速度值作为环境状态的观测量
     void dimMask(Eigen::Array<double, 6, 1> array, int dimension);          // 隐藏导纳运动多余的空间运动维数
