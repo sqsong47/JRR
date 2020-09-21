@@ -15,16 +15,24 @@ class DDPG(object):
         self.episode_reward = 0.0
         self.cpp_online = False
         self.python_online = False
-        self.velocity_expect = 0.30  # target velocity
+
+
+
+        self.velocity_expect = 0.57  # target velocity
+
+
+
+
         self.is_run_done = 0
         self.step_number = 0
+        self.distance = 0.0
 
         # parameter adjustable
         self.velocity_normalization = 1 / self.velocity_expect
-        self.acceleration_normalization = 1 / 5
+        self.acceleration_normalization = 1 / 1.5
         self.jerk_normalization = 1 / 300
-        self.MAX_EPISODES = 30  # max times of episodes
-        self.MAX_EP_STEPS = 50  # max number of steps per episode  （*0.05）
+        self.MAX_EPISODES = 300  # max times of episodes
+        self.MAX_EP_STEPS = 80  # max number of steps per episode  （*0.03）
         self.a_bound = 7.5      # range of action
 
         self.LR_A = 0.001  # learning rate for actor
@@ -103,10 +111,11 @@ class DDPG(object):
             net = tf.nn.relu(tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + b1)
             return tf.layers.dense(net, 1, trainable=trainable)  # Q(s,a)
 
-    def step(self, velocity, acceleration, jerk):
+    def step(self, velocity, acceleration, jerk, distance):
         self.velocity = velocity * self.velocity_normalization
         self.acceleration = acceleration * self.acceleration_normalization
         self.jerk = jerk * self.jerk_normalization
+        self.distance = distance
         self.cpp_online = True
         while self.python_online:
             time.sleep(0.001)
@@ -130,7 +139,7 @@ class DDPG(object):
             step_number = 1
             self.episode_reward = 0.0
             self.is_episode_done = False
-            self.admittance = 15
+            self.admittance = 150       # 验证初始B值
             self.step_number = 0
 
             self.episode_number += 1
@@ -143,7 +152,7 @@ class DDPG(object):
                 self.python_online = True
                 step_number += 1
                 s = np.array([self.velocity, self.acceleration])
-                if self.velocity == 404:
+                if self.velocity == 404 / self.velocity_normalization:
                     print("3333333 episode finished because robot close to the limits")
                     self.velocity = 0
                     step_number = 50
@@ -164,8 +173,9 @@ class DDPG(object):
 
                 self.episode_reward += r
                 # 下面是episode结束的条件
-                if abs((self.velocity / self.velocity_normalization - self.velocity_expect) / self.velocity_expect) <= 0.075 and abs(
-                        self.acceleration / self.acceleration_normalization / self.velocity_expect) <= 5:
+                # TODO: 全部改成百分比判断 ，距离改成成员变量
+                if abs((self.velocity / self.velocity_normalization - self.velocity_expect) / self.velocity_expect) <= 0.05 and abs(
+                        self.acceleration / self.acceleration_normalization / self.velocity_expect) <= 5 and abs(self.distance - 65) <= 5:
                     self.is_episode_done = True
                     print("----------------------11111一次episode结束因为速度符合条件-------------------------episode",
                           self.episode_number)

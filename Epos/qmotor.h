@@ -76,7 +76,7 @@ public:
     BOOL ePOS_GetPositionIs(const WORD NodeId,long& pPositionIs);
 
     // Get current velocity
-    BOOL ePOS_GetVelocityIsAveraged(const WORD NodeId,long& pVelocityIsAveraged);
+    BOOL ePOS_GetVelocityIsAveraged(const WORD NodeId, double& pVelocityIsAveraged, const int jingdu = 0);
     BOOL ePOS_GetVelocityIs(const WORD NodeId,long& pVelocityIs);
 
     // Get actual current
@@ -111,13 +111,13 @@ public:
     BOOL ePOS_ActiveProfileVelocityMode(const WORD NodeId);
     BOOL ePOS_SetVelocityProfile(const WORD NodeId,const DWORD ProfileAcceleration, const DWORD ProfileDeceleration);
     BOOL ePOS_GetVelocityProfile(const WORD NodeId,DWORD &ProfileAcceleration, DWORD &ProfileDeceleration);
-    BOOL ePOS_MoveWithVelocity(const WORD NodeId, const long TargetVelocity);
+    BOOL ePOS_MoveWithVelocity(const WORD NodeId, const long TargetVelocity, const int jindu = 0);
     BOOL ePOS_GetTargetVelocity(const WORD NodeId, long& TargetVelocity);
     BOOL ePOS_HaltVelocityMovement(const WORD NodeId);
 
     // VM
     BOOL ePOS_ActiveVelocityMode(const WORD NodeId);
-    BOOL ePOS_SetVelocityMust(const WORD NodeId,const long VelocityMust);
+    BOOL ePOS_SetVelocityMust(const WORD NodeId, const long VelocityMust, const int jingdu = 0);
     BOOL ePOS_GetVelocityMust(const WORD NodeId, long& pVelocityMust);
 
     // CM
@@ -132,6 +132,11 @@ public:
     BOOL ePOS_CloseSystem();            // similar to destructor
     BOOL ePOS_QuickStop();
 
+    // change velocity units
+    BOOL ePOS_SetVelocityUnits(WORD NodeId, char VelNotation);
+    BOOL ePOS_GetVelocityUnits(WORD NodeId, char& pVelNotation);
+    BOOL ePOS_SetMilliVelocityUnits();
+
 private:
     HANDLE _keyHandle;                  // Handle of Epos2
     DWORD _errorCode;                   // Message of Error
@@ -145,6 +150,8 @@ private:
     // 为私有数据提供了公有访问接口
     QMap<WORD,enum OperationMode> _operationMap;
     QMap<WORD,enum MotorState> _stateMap;
+
+
 
 signals:
 

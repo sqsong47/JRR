@@ -1,9 +1,8 @@
-// Copyright (C) 2013-2014 Thalmic Labs Inc.
+﻿// Copyright (C) 2013-2014 Thalmic Labs Inc.
 // Distributed under the Myo SDK license agreement. See LICENSE.txt for details.
 #pragma once
 
 #include <stdint.h>
-
 #include "Pose.hpp"
 
 namespace myo {

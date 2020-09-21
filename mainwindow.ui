@@ -593,24 +593,11 @@
      <string>暂停训练</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="ptn_activeVM">
-    <property name="geometry">
-     <rect>
-      <x>600</x>
-      <y>270</y>
-      <width>101</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>激活(P)VM</string>
-    </property>
-   </widget>
    <widget class="QPushButton" name="ptn_testVel">
     <property name="geometry">
      <rect>
-      <x>590</x>
-      <y>460</y>
+      <x>740</x>
+      <y>20</y>
       <width>111</width>
       <height>71</height>
      </rect>
@@ -619,17 +606,95 @@
      <string>测试末端速度</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="ptn_dataBase">
+   <widget class="QPushButton" name="ptn_joint5_enable">
     <property name="geometry">
      <rect>
-      <x>610</x>
-      <y>550</y>
-      <width>121</width>
-      <height>61</height>
+      <x>380</x>
+      <y>290</y>
+      <width>111</width>
+      <height>51</height>
      </rect>
     </property>
     <property name="text">
-     <string>测试数据库</string>
+     <string>joint5_Enable</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="ptn_joint5_home">
+    <property name="geometry">
+     <rect>
+      <x>380</x>
+      <y>350</y>
+      <width>111</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>joint5_Home</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="ptn_change_units">
+    <property name="geometry">
+     <rect>
+      <x>660</x>
+      <y>280</y>
+      <width>111</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>读取速度单位</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="ptn_set_units">
+    <property name="geometry">
+     <rect>
+      <x>660</x>
+      <y>220</y>
+      <width>111</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>设置速度单位</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_2">
+    <property name="geometry">
+     <rect>
+      <x>680</x>
+      <y>430</y>
+      <width>91</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>设置VM模式</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_3">
+    <property name="geometry">
+     <rect>
+      <x>680</x>
+      <y>470</y>
+      <width>91</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>开始运动</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_4">
+    <property name="geometry">
+     <rect>
+      <x>680</x>
+      <y>510</y>
+      <width>91</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>停止运动</string>
     </property>
    </widget>
   </widget>

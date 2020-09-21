@@ -1,4 +1,4 @@
-#include "qmotor.h"
+﻿#include "qmotor.h"
 #include <QDebug>
 
 QMotor::QMotor(QObject *parent) : QObject(parent)
@@ -472,11 +472,31 @@ BOOL QMotor::ePOS_GetPositionIs(const WORD NodeId, long &pPositionIs)
     return TRUE;
 }
 
-BOOL QMotor::ePOS_GetVelocityIsAveraged(const WORD NodeId, long &pVelocityIsAveraged)
+BOOL QMotor::ePOS_GetVelocityIsAveraged(const WORD NodeId, double &pVelocityIsAveraged, const int jingdu)
 {
-    if(!VCS_GetVelocityIsAveraged(_keyHandle,NodeId,&pVelocityIsAveraged,&_errorCode))
-    {
+    long tmp_velocity = 0;
+    if(!VCS_GetVelocityIsAveraged(_keyHandle,NodeId,&tmp_velocity,&_errorCode)){
         return FALSE;
+    }
+
+    switch (jingdu){
+    case 0:{
+        pVelocityIsAveraged = static_cast<double>( tmp_velocity);
+        break;
+    }
+    case -1:{
+        pVelocityIsAveraged = static_cast<double>( tmp_velocity) /10;
+        break;
+    }
+
+    case -2:{
+        pVelocityIsAveraged = static_cast<double>( tmp_velocity) /100;
+        break;
+    }
+    case -3:{
+        pVelocityIsAveraged = static_cast<double>( tmp_velocity) /1000;
+        break;
+    }
     }
     return TRUE;
 }
@@ -628,9 +648,36 @@ BOOL QMotor::ePOS_GetVelocityProfile(const WORD NodeId, DWORD &ProfileAccelerati
     return TRUE;
 }
 
-BOOL QMotor::ePOS_MoveWithVelocity(const WORD NodeId, const long TargetVelocity)
+BOOL QMotor::ePOS_MoveWithVelocity(const WORD NodeId, const long TargetVelocity, const int jindu )
 {
-    if(!VCS_MoveWithVelocity(_keyHandle,NodeId,TargetVelocity,&_errorCode))
+    long velocity = 0;
+    switch (jindu)
+    {
+    case 0:
+    {
+        velocity = TargetVelocity;
+        break;
+    }
+    case -1:
+    {
+        velocity = TargetVelocity * 10;
+        break;
+    }
+    case -2:
+    {
+        velocity = TargetVelocity * 100;
+        break;
+    }
+    case -3:
+    {
+        velocity = TargetVelocity * 1000;
+        break;
+    }
+    default:
+        return FALSE;
+
+    }
+    if(!VCS_MoveWithVelocity(_keyHandle,NodeId,velocity,&_errorCode))
     {
         return FALSE;
     }
@@ -665,10 +712,31 @@ BOOL QMotor::ePOS_ActiveVelocityMode(WORD NodeId)
     return TRUE;
 }
 
-BOOL QMotor::ePOS_SetVelocityMust(const WORD NodeId, const long VelocityMust)
+BOOL QMotor::ePOS_SetVelocityMust(const WORD NodeId, const long VelocityMust, const int jingdu)
 {
-    if(!VCS_SetVelocityMust(_keyHandle, NodeId, VelocityMust, &_errorCode))
-    {
+    long velocity = 0;
+    switch (jingdu){
+    case 0:{
+        velocity = VelocityMust;
+        break;
+    }
+    case -1:{
+        velocity = VelocityMust * 10;
+        break;
+    }
+    case -2:{
+        velocity = VelocityMust * 100;
+        break;
+    }
+    case -3:{
+        velocity = VelocityMust * 1000;
+        break;
+    }
+    default:
+        return FALSE;
+    }
+
+    if(!VCS_SetVelocityMust(_keyHandle, NodeId, velocity, &_errorCode)){
         return FALSE;
     }
     return TRUE;
@@ -754,6 +822,41 @@ BOOL QMotor::ePOS_QuickStop()
     }
     return TRUE;
 }
+
+BOOL QMotor::ePOS_SetVelocityUnits(WORD NodeId, char VelNotation)
+{
+    BYTE VelDimension = 0xA4;
+    if(!VCS_SetVelocityUnits(_keyHandle, NodeId, VelDimension, VelNotation, &_errorCode))
+    {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+BOOL QMotor::ePOS_GetVelocityUnits(WORD NodeId, char& pVelNotation)
+{
+    // 测试
+    BYTE VelDimesnsion = 0xA4;
+    if(!VCS_GetVelocityUnits(_keyHandle, NodeId, &VelDimesnsion, &pVelNotation, &_errorCode))
+    {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+BOOL QMotor::ePOS_SetMilliVelocityUnits()
+{
+    for(WORD i = 1; i <= 6; i++)
+    {
+        if(!ePOS_SetVelocityUnits(i, VN_MILLI))
+        {
+            return FALSE;
+        }
+    }
+    return TRUE;
+}
+
+
 
 
 

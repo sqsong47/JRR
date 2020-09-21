@@ -3,6 +3,8 @@
 
 #include <QObject>
 #include <Eigen/Eigen/Dense>
+#include <vector>
+#include <queue>
 
 /**********************************************************************************
  * 2020.06.12       宋世奇
@@ -12,6 +14,9 @@
 
 // 属于Robot，可以在其他文件中进行引用
 const int TS = 30;         // 测试时用100，运行时用30
+const int TW = 5;          // 但关节实验，训练周期为5ms
+const double PI = 3.141592653898;
+
 const unsigned char JRR_JOINT_NUMBER = 6;
 const unsigned char SRI_CHANNEL_NUMBER = 6;
 
@@ -37,7 +42,8 @@ public:
 
     // 本来也应该是私有成员
     const double transRatio[JRR_JOINT_NUMBER] = {12.9, 23.6, 11.6, 20.09333333, 3.6, 4.7777777778};        // 电机到关节的传动比
-    const int directions[JRR_JOINT_NUMBER] = {-1, 1, 1, -1, -1, -1};                                       // 方向修正，由绕线方向决定
+    const int directions[JRR_JOINT_NUMBER] = {-1, 1, 1, -1, -1, -1};  // 准确的方向修正
+    // const int directions[JRR_JOINT_NUMBER] = {-1, 1, 1, -1, 1, -1};   // 5关节实验用的数据
     const int countsPerTurn[JRR_JOINT_NUMBER] = {2000, 2000, 2000, 25600, 20000, 16384};                   // 电机每圈多少脉冲
 
 public:
@@ -56,11 +62,11 @@ public:
     void setVirtualDampValue(const Eigen::Array<double, 6, 1> dampTmp);                                     // 设置虚拟阻尼
     void setCurrentEncoderAngle(const double& theta_1, const double& theta_2, const double& theta_3,        // 设置关节角参数,也包含了更新机器人关节角的操作
                                 const double& theta_4, const double& theta_5, const double& theta_6);
-    void setJointVelocity(long v1, long v2, long v3, long v4, long v5, long v6);
+    void setJointVelocity(double v1, double v2, double v3, double v4, double v5, double v6);
 
 
-    void solveEnv();                            // 求解状态的观测值
-    void updateState();                         // 每个时刻读取速度信息后应该更新前两个时刻的速度
+    void solveMotionInfo();                            // 求解状态的观测值
+    void updateMotionInfo();                         // 每个时刻读取速度信息后应该更新前两个时刻的速度
 
     // ------------------------------------------------------------------------------------------------
     double* getForceBias();                     // 读取零点力偏移
@@ -82,7 +88,7 @@ public:
     Eigen::Array<double, JRR_JOINT_NUMBER, 1> getJointAngle();              // 读取关节角
 
 
-    void resetMotionInfo();                                                       // 重置jerk为零，里面其实还有速度和加速度也重置为0
+    void resetMotionInfo(const int joint_number);                                                       // 重置jerk为零，里面其实还有速度和加速度也重置为0
     void updateCartesianVel();                                              // 更新笛卡尔坐标系下末端点的速度加速度和加加速度
 
     /*************************************************************************************************/
@@ -144,7 +150,44 @@ private:
 
     Eigen::Array<double, 6, 1> _jerk;                       // 记录奖励值，是加速度的一阶向后差分
     Eigen::Array<double, 3, 1> _fkine_positon;              // 机器人前向动力学的位置矢量，单位为m
-    double _distanceInXdirection;                            // 计算末端在x方向上移动了多少的距离,单位是m
+    double _distanceInXdirection;                           // 计算末端在x方向上移动了多少的距离,单位是m
+    std::vector<double>  _vel_queue;                        // 维护尺寸为3的队列
+    double _mean_vel;                                       // 计算的平均速度
+
+
+    std::vector<double> _accel_queue;                       // 记录加速度的值
+    double _mean_accel;                                     // 记录加速度的平均值
+    std::vector<double> _jerk_queue;                        // 记录jerk的值
+    double _mean_jerk;                                      // 计算平均的jerk
+
+    //****************joint 5***************************
+    double J_exp;                   // 转动惯量
+    double torque_j5;               // 5关节的预设力矩
+    std::vector<double> omega_joint;   // 5关节的转速历史记录
+
+    double omega_t = 0, omega_t_1 = 0;      // 当前时刻和上一时刻的角速度
+
+    // 记录关节角的值
+    double angle_t = 0;
+    double angle_t_1 = angle_t;
+
+    // 暂时没有用到加速度和jerk
+    double alpha_t = 0, alpha_t_1 = alpha_t;      // 当前时刻和上一时刻的角加速度
+    double jerk_joint = 0;                     // 关节5的jerk值
+
+    double mean_omega = 0;                  // 关节5的平均速度
+    long omega_motor = 0;
+    double omega_observe_t = 0;
+    double omega_observe_t_1 = omega_observe_t;
+
+public:
+    long update_omega_motor(double B_virtual, int test_joint_number); // 根据B值计算下一时刻电机期望的角速度
+    void update_omega_joint(const double omega_j5_motor, const int test_joint_number);
+    double get_omega_joint();
+    bool get_angle(const int index, double &jointAngle);
+    double get_omega_exp();
+    void get_angle_velocity(const int joint_number);  // 根据关节转角计算速度
+
 
 
 signals:

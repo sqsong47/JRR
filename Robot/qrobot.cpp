@@ -7,8 +7,6 @@
 
 #define DEBUG
 
-static const double PI = 3.141592653898;
-
 /*********************************************************************
  * 2020.06.11   宋世奇
  * 1. 如果以速度模式进行导纳控制，根本不需要进行位置零点记录，但是由于要切换电机的
@@ -48,7 +46,7 @@ QRobot::QRobot(QObject *parent) : QObject(parent)
     _distanceInXdirection = 0;
 
     // 以下代码为机器人的归零程序使用的代码
-//    _q_z << 220.316, 90.342, 269.614, 327.452, 303.712, 346.535;
+    //    _q_z << 220.316, 90.342, 269.614, 327.452, 303.712, 346.535;
     _q_z << 220.316, 90.342 - 1.107, 269.614, 328.663, 307.966, 346.535;
 
     _q_e = Eigen::Array<double, 6, 1>::Zero();
@@ -70,6 +68,40 @@ QRobot::QRobot(QObject *parent) : QObject(parent)
 
     _virtualMass << 10, 10, 10, 10, 10, 10;                        // 初始化质量， 旋转轴非常大，暂定
     _virtualDamp << 25.0, 25.0, 50.0, 5, 5, 5;               // 初始化阻尼， 正数,旋转轴非常大，暂定
+
+
+    // **************************Reinforce Learning*************************************
+    for(int i = 0; i < 3; i++)
+    {
+        // _vel_queue.push_back(0);
+        _accel_queue.push_back(0);
+        _jerk_queue.push_back(0);
+    }
+
+    for(int i = 0; i < 6; i++)
+    {
+        _vel_queue.push_back(0);
+    }
+    _mean_vel = 0;
+
+    _mean_accel = 0;
+    _mean_jerk = 0;
+
+#define DEBUG_VEL_QUEUE
+#ifndef DEBUG_VEL_QUEUE
+    for(auto& c: _vel_queue)
+    {
+        std::cout<< c << " ";
+    }
+    std::cout << std::endl;
+#endif
+
+    //***************joint 5*********************
+    for(int i = 0; i < 6; i++)
+    {
+        omega_joint.push_back(0);
+    }
+
 }
 
 
@@ -218,7 +250,6 @@ bool QRobot::updateAdmMotionPara()  // 主要更新的还是下个时间片的�
 // 利用C++的函数重载功能，带导纳参数的代表用于强化学习的训练阶段
 bool QRobot::updateAdmMotionPara(double virtualDamp)
 {
-
     // 设置导纳参数，先预设各个方向的阻尼值都是一样的，就是传入的阻抗参数
     Eigen::Array<double, 6, 1> dampArr = virtualDamp * Eigen::Array<double, 6, 1>::Ones();
     _forceInCartesian << 5, 0, 0, 0, 0, 0;              // 只有延x轴方向有力
@@ -229,8 +260,8 @@ bool QRobot::updateAdmMotionPara(double virtualDamp)
 
 #define DEUBG_ADM_PARA
 #ifndef DEUBG_ADM_PARA
-//    std::cout << "Dampling: " << dampArr.transpose() << std::endl;
-//    std::cout << "Force in cartessian: " << _forceInCartesian[0] << std::endl;
+    //    std::cout << "Dampling: " << dampArr.transpose() << std::endl;
+    //    std::cout << "Force in cartessian: " << _forceInCartesian[0] << std::endl;
     std::cout << std::setw(16) << "last_velocity  velocity" << std::setw(16) <<
                  _lastVelocity.transpose()[0] << std::setw(16) << _velocity.transpose()[0] << std::endl;
 #endif
@@ -241,14 +272,18 @@ bool QRobot::updateAdmMotionPara(double virtualDamp)
     // 反算期望的关节速度，rad/s
     _d_qd_j = _invJacob * (_velocity.matrix());
 
+    std::cout << "motor velocity is: ";
     for(int i = 0; i < JRR_JOINT_NUMBER; i++)
     {
         // 反算关节电机的速度，单位是rpm  经实验验证是对的
         _d_qd_m[i] = static_cast<long>(_d_qd_j(i,0) * 30 * transRatio[i] * directions[i] / PI);
+        std::cout << _d_qd_m[i] << " ";      // 输出电机速度
     }
+    std::cout << std::endl;
 
-
+    // qDebug() << "velocity of motor 1 is : " << _d_qd_m[0];
     // 至此已经计算出来电机应该执行的速度
+
     return true;
 }
 
@@ -350,7 +385,7 @@ Eigen::Array<double, JRR_JOINT_NUMBER, 1> QRobot::getJointAngle()
 
 }
 
-void QRobot::resetMotionInfo()
+void QRobot::resetMotionInfo(const int joint_number)
 {
     // 清空速度/加速度/加加速度
     _jerk = Eigen::Array<double, 6, 1>::Zero();
@@ -364,6 +399,46 @@ void QRobot::resetMotionInfo()
     // 重置导纳运动速度
     _velocity = 0;
     _lastVelocity = 0;
+
+    // 均值数据也需要重置为零
+    _mean_vel = 0;
+    _mean_jerk = 0;
+    _mean_accel = 0;
+
+    for(auto& c: _vel_queue){
+        c = 0;
+    }
+
+    for(auto& c: _accel_queue){
+        c = 0;
+    }
+
+    for(auto& c: _jerk_queue){
+        c = 0;
+    }
+
+    // *********single  joint *************
+    omega_t = 0;
+    omega_t_1 = 0;
+    omega_motor = 0;
+    omega_observe_t = 0;
+    omega_observe_t_1 = 0;
+
+    alpha_t = 0;
+    alpha_t_1 = 0;
+
+    jerk_joint = 0;
+
+    for(auto& omega: omega_joint)
+    {
+        omega = 0;
+    }
+
+    // joint encoder
+    // 有个小问题，初始时刻的角度一定要处于零位，不然angle_t和angle_t_1的初始值应该随之而变
+    angle_t = _q_j[joint_number - 1];
+    angle_t_1 = angle_t;
+
 }
 
 
@@ -449,7 +524,7 @@ void QRobot::updateCartesianVel()
     }
 
     // 以下代码分别为计算观测值以及更新观测值
-    solveEnv();
+    solveMotionInfo();
 
 #define DEBUG_RLAVL_CARTESSIAN
 #ifndef DEBUG_RLAVL_CARTESSIAN
@@ -457,7 +532,52 @@ void QRobot::updateCartesianVel()
     std::cout << std::setw(24) << "accel     last_accel" << std::setw(16) << _rlAcce_t[0] << std::setw(16) << _rlAcce_t_1[0] << std::endl;
 #endif
 
-    updateState();
+    updateMotionInfo();
+
+    // 将计算出来的末端速度值转存到_vel_queue中
+    _vel_queue.erase(_vel_queue.begin());   // 去除首元素
+    _vel_queue.push_back(_rlCarVel_t[0]);   // 末尾添加现有速度
+
+    _accel_queue.erase(_accel_queue.begin());
+    _accel_queue.push_back(_rlAcce_t[0]);
+
+    _jerk_queue.erase(_jerk_queue.begin());
+    _jerk_queue.push_back(_jerk[0]);
+
+
+
+    // 根据历史记录计算平均速度
+    double sum_vel = 0;
+    for(auto& c: _vel_queue)
+    {
+        sum_vel += c;
+    }
+    _mean_vel = sum_vel / _vel_queue.size();        // 输出的速度的平均值
+
+    // 将计算出来的末端加速度值转存到_accel_queue中
+    double sum_accel = 0;
+    for (auto& c: _accel_queue)
+    {
+        sum_accel += c;
+    }
+    _mean_accel = sum_accel / _accel_queue.size();
+
+    // 将计算出来的jerk转存到_jerk_queue中
+    double sum_jerk = 0;
+    for(auto& c: _jerk_queue)
+    {
+        sum_jerk += c;
+    }
+    _mean_jerk = sum_jerk / _jerk_queue.size();
+
+#define DEBUG_CAR_VEL_QUEUE
+#ifndef DEBUG_CAR_VEL_QUEUE
+    for(auto& c: _vel_queue)
+    {
+        std::cout << c << " ";
+    }
+    std::cout << std::endl;
+#endif
 }
 
 Eigen::Array<double, 6, 1> QRobot::getJointVelocity()
@@ -468,17 +588,22 @@ Eigen::Array<double, 6, 1> QRobot::getJointVelocity()
 double QRobot::getJerk()
 {
     // 返回jerk的绝对值作为奖励
-    return qFabs( _jerk[0]);
+    //    return qFabs( _jerk[0]);
+    //    return _jerk[0];
+    return _mean_jerk;
 }
 
 double QRobot::getAccel()
 {
-    return _rlAcce_t[0];
+    //    return _rlAcce_t[0];
+    return _mean_accel;
 }
 
 double QRobot::getVelocity()
 {
-    return _rlCarVel_t[0];
+    //    return _rlCarVel_t[0];
+
+    return _mean_vel;   // 返回速度的平均值，更新周期也是10ms
 }
 
 
@@ -592,20 +717,114 @@ void QRobot::testTermVel()
     }
 }
 
+long QRobot::update_omega_motor(double B_virtual, int test_joint_number)
+{
+    // 如果输入力矩等于0，机器人应该不会动
+    torque_j5 = -5;
+
+    // 转动惯量应该很小才对，需要仿真
+    J_exp = 10;
+
+    // 全部使用国际标准单位制 rad/s
+    omega_t = (0.001 * TS * torque_j5 + J_exp * omega_t_1) / (J_exp + B_virtual * TS * 0.001);
+    omega_t_1 = omega_t;
+
+    // std::cout << std::setw(12) << "omega_t: " << std::setw(12) << omega_t << std::endl;
+
+    // 进行单位转换 rad/s -> rpm , 将关节转速映射到电机上
+    omega_motor = static_cast<long>(omega_t * 30 / PI * transRatio[test_joint_number-1] * directions[test_joint_number-1]);
+    return omega_motor;
+}
+
+void QRobot::update_omega_joint(const double omega_j5_motor, const int test_joint_number)
+{
+    // rpm -> rad/s，根据读取的电机速度，计算关节转速
+    double tmp_omega = omega_j5_motor * 2.0 * PI / 60;
+
+    // 对关节速度的观测值进行赋值
+    omega_observe_t = tmp_omega / transRatio[test_joint_number-1] * directions[test_joint_number-1];
+
+#define DEBUG_OMEGA_OBSERVE
+#ifndef DEBUG_OMEGA_OBSERVE
+    // 读取角速度，以5ms的速度进行更新
+    qDebug() << "omega_observe: " << omega_observe_t;
+#endif
+
+#ifndef DEBUG_ALPHA_JERK
+    // 记录角加速度现在并没有用到
+    alpha_t = (omega_observe_t - omega_observe_t_1) / TW * 1000;    // rad/s
+
+    // qDebug() << "alpha is: " << alpha_t;
+
+    omega_observe_t_1 = omega_t;
+
+    // jerk也并没有用到
+    jerk_joint = (alpha_t - alpha_t_1) / TW * 1000;    // rad/s^2
+    alpha_t_1 = alpha_t;
+
+    qDebug() << "jerk_joint: " << jerk_joint;
+
+#endif
+
+    // 记录当前速度值
+    omega_joint.erase(omega_joint.begin());
+    omega_joint.push_back(omega_observe_t);
+
+    // 求平均
+    double sum = 0;
+    for(const auto& omega: omega_joint)
+    {
+        sum += omega;
+    }
+    mean_omega = sum / omega_joint.size();  // rad/s
+}
 
 
+double QRobot::get_omega_joint()
+{
+    return mean_omega;
+}
+
+bool QRobot::get_angle(const int index, double& jointAngle)
+{
+    if(index < 1 || index > 6)
+    {
+        return false;
+    }
+    jointAngle = _q_j[index-1];
+    return true;
+}
+
+double QRobot::get_omega_exp()
+{
+    return omega_t;
+}
 
 
+void QRobot::get_angle_velocity(const int joint_number)
+{
+    angle_t = _q_j[joint_number-1];     //取当前时刻的角度
+    double omega = (angle_t - angle_t_1) / 180 * PI / TW * 1000;    // 计算角速度，rad/s
+    angle_t_1 = angle_t;
 
+#define DEBUG_ANGLG_T
+#ifndef DEBUG_ANGLG_T
+//    std::cout << "angle_t is: " << std::setw(16) << angle_t << std::endl;
+    std::cout << "omega is: " << std::setw(16) << omega << std::endl;
+#endif
 
+    // 存到vector中
+    omega_joint.erase(omega_joint.begin());
+    omega_joint.push_back(omega);
 
-
-
-
-
-
-
-
+    // 求平均
+    double sum = 0;
+    for(const auto& omega: omega_joint)
+    {
+        sum += omega;
+    }
+    mean_omega = sum / omega_joint.size();  // rad/s
+}
 
 
 void QRobot::setHighAdmittancePara()
@@ -673,8 +892,8 @@ void QRobot::setCurrentEncoderAngle(
     }
 }
 
-void QRobot::setJointVelocity(long v1, long v2, long v3,
-                              long v4, long v5, long v6)
+void QRobot::setJointVelocity(double v1, double v2, double v3,
+                              double v4, double v5, double v6)
 {
     // 电机采集的速度应该进行传动比的转换才能映射到关节速度上
     // rpm转rad/s
@@ -702,7 +921,7 @@ void QRobot::setJointVelocity(long v1, long v2, long v3,
 
 }
 
-void QRobot::solveEnv()
+void QRobot::solveMotionInfo()
 {
     // 以下代码计算末端笛卡尔速度/加速度/加加速度
     // 注意下面的_velocity和_lastVelocity导纳运动期望输出的速度，和这里真实计算的是有偏差的
@@ -718,7 +937,7 @@ void QRobot::solveEnv()
 #endif
 }
 
-void QRobot::updateState()
+void QRobot::updateMotionInfo()
 {
     // 进行速度的更新
     _rlCarVel_t_1 = _rlCarVel_t;

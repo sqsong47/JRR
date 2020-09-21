@@ -18,6 +18,10 @@
 
 // SQL操作
 #include <QSqlDatabase>
+#include <QSqlQuery>
+
+// 根据速度计算加速度
+#include <vector>
 
 
 namespace Ui {
@@ -89,7 +93,7 @@ private:
     BOOL _isTraingFlag;                 // 启动训练的标志变量
 
     BOOL _isDangerFlag;                 // 关节接近限位的标志变量
-    bool _isTestVelFlag = false;        // 测试末端速度
+    BOOL _isTestVelFlag;        // 测试末端速度
 
     // PythonHandler
     PythonHandler* _pyHandler;
@@ -97,17 +101,43 @@ private:
 
     // sql操作
     QSqlDatabase _db;
+    QSqlQuery _query;
 
+    // 计算加速度和jerk
+    std::vector<double> _vel_queue;
+    std::vector<double> _accel_queue;
+    std::vector<double> _jerk_queue;
+
+    // 单关节实验
+    double _angle_t = 0;
+    double _angle_t_1 = _angle_t;
+
+    double getAcceleration();
+    double getJerk();
+    void resetMotionInfo();
+
+    // 关节5回零程序
+    bool joint_homing();
+
+    std::vector<double> _omega_queue;
+    std::vector<double> _alpha_queue;
+
+    //
+    WORD test_joint_number;
 
 private slots:
     void showError(std::string Msg);    // 显示错误信息
     void mainControlLoop();             // 给_robot输入数据，并做数据处理
     void showSriConfigState();          // 显示力矩传感器的状态
+    bool openDataBase();
+
     bool createConnetion(int time_stamp,
                          double velocity,
                          double acceleration,
                          double jerk,
-                         double B);             // 数据库的链接函数
+                         double B,
+                         double distance, double vel_exp);     // 数据库的链接函数
+    void updateRobotInfo();             // 更新机器人参数
 
 signals:
     void errorOccur(std::string);       // 错误信号
@@ -134,9 +164,16 @@ private slots:
     void on_ptn_pythonInit_clicked();
     void on_ptn_suspendTrain_clicked();
     void on_ptn_startTrain_clicked();
-    void on_ptn_activeVM_clicked();
+
     void on_ptn_testVel_clicked();
-    void on_ptn_dataBase_clicked();
+
+    void on_ptn_joint5_enable_clicked();
+    void on_ptn_joint5_home_clicked();
+    void on_ptn_change_units_clicked();
+    void on_ptn_set_units_clicked();
+
+    void on_pushButton_2_clicked();
+    void on_pushButton_3_clicked();
 };
 
 #endif // MAINWINDOW_H

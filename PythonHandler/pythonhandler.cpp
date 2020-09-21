@@ -109,17 +109,20 @@ void PythonHandler::startRun()
 }
 
 double PythonHandler::trainOneStep(const double velocity,
-                                   const double accelaration, const double jerk)
+                                   const double accelaration,
+                                   const double jerk,
+                                   const double distance)
 {
     // 获得全局锁
     class PyThreadStateLock PyThreadLock;
 
     // 需要查看bool类型的值是不是“i”,格式控制尤其要注意
-    PyObject* pArg = PyTuple_New(3);
+    PyObject* pArg = PyTuple_New(4);
 
     PyTuple_SetItem(pArg, 0, Py_BuildValue("f", velocity));
     PyTuple_SetItem(pArg, 1, Py_BuildValue("f", accelaration));
     PyTuple_SetItem(pArg, 2, Py_BuildValue("f", jerk));
+    PyTuple_SetItem(pArg, 3, Py_BuildValue("f", distance));
 
     // Python 脚本中的 step 有延时函数
     _pRet = PyObject_CallMethod(_pInstance, "step", "O", pArg);

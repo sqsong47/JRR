@@ -23,7 +23,7 @@ public:
     void startRun();
 
     // 接口函数，trainOneStep执行一次训练操作，有输入有输出
-    double trainOneStep(const double velocity, const double accelaration, const double jerk);
+    double trainOneStep(const double velocity, const double accelaration, const double jerk, const double distance);
 
     // 每次episode结束时，调用该函数显示总奖励
     double sumReward();
